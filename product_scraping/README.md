@@ -1,6 +1,6 @@
-# ⚡ SDK UTILITY STUDIO — ALL-IN-ONE WORKBENCH (KHÔNG TỰ TẮT)
+# ⚡ PRODUCT SCRAPING STUDIO — ALL-IN-ONE WORKBENCH (KHÔNG TỰ TẮT)
 
-> **Bàn làm việc thực tế sử dụng trực tiếp toàn bộ 5 SDK Zero-API**: Google Gemini AI & Banana Studio, Shopee E-Commerce, TikTok & Douyin Video, Alibaba 1688 Sỉ, Google Lens Vision.
+> **Bàn làm việc thực tế khai thác và phân tích sản phẩm đa nền tảng**: Google Gemini AI Multimodal Vision, Shopee E-Commerce, TikTok & Douyin Video, Alibaba 1688 Sỉ, Google Lens Vision.
 > **Kiến trúc Clean Architecture 2.0**: Phân rã module chuyên biệt (SRP & Facade Pattern), xử lý mạng ổn định, **bảo lưu toàn bộ Terminal Logs** và tích hợp công nghệ **Chrome Side Panel** không bao giờ bị tự tắt khi chuyển tab!
 
 ---
@@ -14,7 +14,7 @@
 2. Bật công tắc **Developer mode** (Chế độ nhà phát triển ở góc trên bên phải).
 3. Bấm **Load unpacked** (Tải tiện ích đã giải nén) và chọn thư mục:
    ```text
-   d:\makerting\Tool\Workflow\sdk_utility\test_all_extension
+   d:\makerting\Tool\Workflow\product_scraping
    ```
 4. Ghim icon Extension lên thanh công cụ của Chrome.
 5. **Click vào biểu tượng Extension:**
@@ -37,7 +37,7 @@
 Codebase được thiết kế theo các tầng phân tách trách nhiệm rõ ràng, file gọn gàng (100–250 dòng):
 
 ```text
-test_all_extension/
+product_scraping/
 ├── manifest.json & rules.json  (Cấu hình MV3 & CORS Bypass Engine cho MTop API)
 ├── background.js              (Service Worker điều khiển Chrome Tab & Download API)
 ├── ui/

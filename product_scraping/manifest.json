@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SDK Utility Suite - All-in-One Studio",
+  "name": "Product Scraping - AI Multimodal Workflow Studio",
   "version": "1.0.0",
-  "description": "Bàn làm việc tích hợp sử dụng trực tiếp toàn bộ 5 SDK: Gemini AI, Shopee, TikTok/Douyin, Alibaba 1688 và Google Lens (Không tự tắt, hỗ trợ Side Panel)",
+  "description": "Bàn làm việc khai thác và phân tích sản phẩm đa nền tảng kết hợp AI Multimodal Vision (1688, Shopee, TikTok/Douyin, Gemini AI)",
   "permissions": [
     "sidePanel",
     "cookies",
@@ -36,7 +36,7 @@
     "default_path": "ui/index.html"
   },
   "action": {
-    "default_title": "Mở SDK Utility Suite Studio (Ghim Cố Định)"
+    "default_title": "Mở Product Scraping Studio (Ghim Cố Định)"
   },
   "declarative_net_request": {
     "rule_resources": [

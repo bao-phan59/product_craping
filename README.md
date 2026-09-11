@@ -42,7 +42,7 @@ product_craping/
 │   ├── 04_MAN_HINH_NGOAI_LE_VA_CANH_BAO.md   # Wireframe Màn 4 (Captcha, Debug Lỗi)
 │   └── 05_SO_DO_LUONG_TUONG_TAC_USER_FLOW.md # Sơ đồ luồng tương tác người dùng
 │
-└── test_all_extension/                       # Mã nguồn Chrome Extension MV3 hoàn chỉnh
+└── product_scraping/                         # Mã nguồn Chrome Extension MV3 hoàn chỉnh
     ├── manifest.json & rules.json            # Cấu hình MV3 & CORS Bypass Engine
     ├── background.js                         # Service Worker điều khiển Tab & Downloads
     ├── libs/jszip.min.js                     # Thư viện đóng gói file ZIP in-memory
