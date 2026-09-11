@@ -22,6 +22,7 @@ import { pipelineState, setCaptchaWait } from './pipelineState.js';
 import {
   verify1688Thumbnails,
   detectComboTrapRatio,
+  synthesizeProductDetailsAndSpecs,
   verifyShopeeThumbnails,
   verifyReviewAuthenticity,
   verifyTikTokCovers
@@ -214,17 +215,45 @@ export async function runStep2_1688Filter(alibaba, gemini, originalImage, upload
  */
 export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, verifiedOffers, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(3, 38, 'Trích xuất Specs & Chống bẫy Combo', 'Cào chi tiết thuộc tính và thẩm định bộ ảnh Gallery chống bẫy combo...');
+  updateProgress(3, 38, 'Đóng gói Mô Tả Sản Phẩm & Dữ Liệu 5 Link 1688', 'Cào chi tiết thuộc tính và thẩm định bộ ảnh Gallery chống bẫy combo...');
   logger.info('STEP 3', 'Bắt đầu kiểm định chi tiết xưởng và phát hiện bẫy bán combo/SKU phụ...');
+
+  // 1. Chuẩn hóa dữ liệu thô đầy đủ của 5 link xưởng 1688 đã được chọn
+  const top5RawShops = (verifiedOffers || []).slice(0, 5).map((o, idx) => {
+    const priceCny = Number(o.price || o.pricing?.priceCny || 0);
+    const priceVnd = Number(o.pricing?.priceVnd || Math.round(priceCny * 3560));
+    return {
+      rank: idx + 1,
+      offerId: String(o.offerId || o.id || ''),
+      title: o.title || `Sản phẩm 1688 #${idx + 1}`,
+      rawTitle: o.raw?.title || o.raw?.subject || o.title || '',
+      imageUrl: o.imageUrl || '',
+      price: priceCny,
+      priceFormatted: o.priceFormatted || `¥${priceCny.toFixed(2)}`,
+      priceVnd: priceVnd,
+      priceFormattedVnd: `${priceVnd.toLocaleString('vi-VN')} ₫`,
+      moq: Number(o.moq || 1),
+      salesCount: Number(o.salesCount || 0),
+      company: {
+        name: o.company?.name || 'Xưởng sản xuất 1688',
+        city: o.company?.city || '',
+        province: o.company?.province || '',
+        isSuperFactory: !!(o.company?.isSuperFactory || o.isSuperFactory),
+        repurchaseRate: o.company?.repurchaseRate || ''
+      },
+      detailUrl: o.detailUrl || `https://detail.1688.com/offer/${o.offerId || o.id}.html`,
+      attributes: o.attributes || o.raw?.attributes || {}
+    };
+  });
 
   let acceptedOffer = null;
   let primaryOfferDetail = {};
 
-  // Duyệt qua các xưởng ứng viên đã chọn
-  for (let i = 0; i < verifiedOffers.length; i++) {
+  // 2. Duyệt qua các xưởng ứng viên để phát hiện bẫy combo
+  for (let i = 0; i < top5RawShops.length; i++) {
     await checkPauseOrAbort();
-    const candidate = verifiedOffers[i];
-    logger.info('STEP 3', `Thẩm định xưởng [${i + 1}/${verifiedOffers.length}] ID: ${candidate.offerId}...`);
+    const candidate = top5RawShops[i];
+    logger.info('STEP 3', `Thẩm định xưởng [${i + 1}/${top5RawShops.length}] ID: ${candidate.offerId}...`);
 
     let detail = {};
     try {
@@ -244,7 +273,7 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
       checkResult = { isSingleProduct: true, ratio: 1.0 };
     }
 
-    if (!checkResult.isSingleProduct && verifiedOffers.length > 1) {
+    if (!checkResult.isSingleProduct && top5RawShops.length > 1) {
       logger.warn('STEP 3', `Phát hiện bẫy bán Combo / SKU phụ ở link ${candidate.offerId} (Tỷ lệ ảnh khớp chỉ ${Math.round(checkResult.ratio * 100)}%). Bỏ link này và thẩm định link tiếp theo...`);
       continue;
     }
@@ -258,13 +287,18 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
 
   // Nếu tất cả link đều bị nghi ngờ combo, lấy link tốt nhất đầu tiên
   if (!acceptedOffer) {
-    acceptedOffer = verifiedOffers[0];
+    acceptedOffer = top5RawShops[0];
     primaryOfferDetail = await alibaba.getOfferDetail(acceptedOffer.offerId).catch(() => ({}));
   }
 
-  const mergedAttributes = (primaryOfferDetail.attributes && Object.keys(primaryOfferDetail.attributes).length > 0)
-    ? primaryOfferDetail.attributes
-    : (acceptedOffer.attributes || { 'Sản phẩm': acceptedOffer.title });
+  // 3. Đưa thông tin cả 5 link xưởng và ảnh gốc cho Gemini AI tổng hợp các đoạn mô tả chi tiết & bảng thông số toàn diện
+  updateProgress(3, 42, 'Gemini AI đóng gói mô tả & specs', 'Đang tổng hợp các đoạn mô tả chi tiết và bảng thông số từ 5 link xưởng...');
+  logger.info('STEP 3', 'Kích hoạt Gemini AI tổng hợp các đoạn mô tả chi tiết và bảng thông số toàn diện từ 5 link 1688...');
+  const synthesized = await synthesizeProductDetailsAndSpecs(gemini, originalImage, top5RawShops, acceptedOffer);
+
+  const mergedAttributes = (synthesized.detailedSpecs && Object.keys(synthesized.detailedSpecs).length > 0)
+    ? synthesized.detailedSpecs
+    : (primaryOfferDetail.attributes && Object.keys(primaryOfferDetail.attributes).length > 0 ? primaryOfferDetail.attributes : { 'Chủng loại': acceptedOffer.title });
 
   const cleanedOffer = cleaner.clean1688Offer({
     ...acceptedOffer,
@@ -272,25 +306,35 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
     attributes: mergedAttributes
   });
 
+  pipelineState.valid1688Shops = top5RawShops;
   pipelineState.cleaned1688 = {
     ...acceptedOffer,
     ...(cleanedOffer || {}),
-    attributes: (cleanedOffer.attributes && Object.keys(cleanedOffer.attributes).length > 0) ? cleanedOffer.attributes : mergedAttributes,
+    productNameVi: synthesized.productNameVi || acceptedOffer.title,
+    productNameEn: synthesized.productNameEn || 'Commercial Product',
+    title: synthesized.productNameVi || acceptedOffer.title,
+    rawTitle: acceptedOffer.rawTitle || acceptedOffer.title,
+    descriptionParagraphs: synthesized.descriptionParagraphs || {},
+    attributes: mergedAttributes,
+    detailedSpecs: mergedAttributes,
+    top5RawShops: top5RawShops,
     detailUrl: acceptedOffer.detailUrl || `https://detail.1688.com/offer/${acceptedOffer.offerId}.html`,
-    basePrice: acceptedOffer.price || cleanedOffer?.basePrice || 0
+    basePrice: acceptedOffer.price || 0,
+    priceFormatted: acceptedOffer.priceFormatted || `¥${acceptedOffer.price}`,
+    priceFormattedVnd: acceptedOffer.priceFormattedVnd || `${(acceptedOffer.priceVnd || 0).toLocaleString()} ₫`
   };
 
   const attrCount = Object.keys(pipelineState.cleaned1688.attributes || {}).length;
   ticker.addTickerItem({
     type: '1688',
-    title: `Specs: ${attrCount} thuộc tính`,
+    title: `Specs: ${attrCount} thông số | ${pipelineState.cleaned1688.title.slice(0, 30)}...`,
     image: acceptedOffer.imageUrl,
-    label: 'Thông Số Kỹ Thuật',
+    label: 'Thông Số & Mô Tả Chi Tiết',
     link: acceptedOffer.detailUrl
   });
 
-  logger.success('STEP 3', `Trích xuất specs thành công (${attrCount} thuộc tính kỹ thuật đã làm sạch).`);
-  return { topOffer: acceptedOffer, primaryOfferDetail };
+  logger.success('STEP 3', `Hoàn tất đóng gói: 3 đoạn mô tả chi tiết, ${attrCount} thông số kỹ thuật và bảo lưu đầy đủ dữ liệu thô 5 link xưởng.`);
+  return { topOffer: acceptedOffer, primaryOfferDetail, top5RawShops };
 }
 
 /**

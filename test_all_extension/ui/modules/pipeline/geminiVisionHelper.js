@@ -11,21 +11,41 @@
 import * as logger from '../logger.js';
 
 /**
- * Trích xuất mảng JSON an toàn từ phản hồi của Gemini AI
+ * Trích xuất JSON (Đối tượng hoặc Mảng) an toàn từ phản hồi của Gemini AI
  * Xử lý được cả markdown codeblock, trailing comma, comment và cấu trúc bao bọc
  * @param {string} rawText
- * @returns {Array<Object>|null}
+ * @returns {Object|Array|null}
  */
-export function safeExtractJsonArray(rawText) {
+export function safeExtractJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
 
   let clean = rawText.trim();
   const mdMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (mdMatch) clean = mdMatch[1].trim();
 
-  // 1. Tìm mảng JSON [ ... ]
+  const firstBrace = clean.indexOf('{');
+  const lastBrace = clean.lastIndexOf('}');
   const firstBracket = clean.indexOf('[');
   const lastBracket = clean.lastIndexOf(']');
+
+  // 1. Thử parse object { ... } nếu xuất hiện trước hoặc chỉ có object
+  if (firstBrace !== -1 && lastBrace > firstBrace && (firstBracket === -1 || firstBrace < firstBracket)) {
+    const jsonStr = clean.slice(firstBrace, lastBrace + 1);
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+
+    try {
+      const sanitized = jsonStr
+        .replace(/,\s*([\]}])/g, '$1')
+        .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+      const parsed = JSON.parse(sanitized);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+
+  // 2. Thử parse mảng [ ... ]
   if (firstBracket !== -1 && lastBracket > firstBracket) {
     const jsonStr = clean.slice(firstBracket, lastBracket + 1);
     try {
@@ -33,7 +53,6 @@ export function safeExtractJsonArray(rawText) {
       if (Array.isArray(parsed)) return parsed;
     } catch {}
 
-    // Dọn dẹp dấu phẩy thừa (trailing commas) mà LLM thường mắc phải
     try {
       const sanitized = jsonStr
         .replace(/,\s*([\]}])/g, '$1')
@@ -43,24 +62,24 @@ export function safeExtractJsonArray(rawText) {
     } catch {}
   }
 
-  // 2. Tìm object JSON { ... } có chứa mảng bên trong
-  const firstBrace = clean.indexOf('{');
-  const lastBrace = clean.lastIndexOf('}');
+  // 3. Fallback parse object nếu có object nằm sau
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const jsonStr = clean.slice(firstBrace, lastBrace + 1);
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+
     try {
       const sanitized = jsonStr
         .replace(/,\s*([\]}])/g, '$1')
         .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
       const parsed = JSON.parse(sanitized);
-      if (parsed && typeof parsed === 'object') {
-        const arr = Object.values(parsed).find(v => Array.isArray(v));
-        if (arr) return arr;
-      }
+      if (parsed && typeof parsed === 'object') return parsed;
     } catch {}
   }
 
-  // 3. Phân tích từng dòng nếu Gemini liệt kê kết quả dạng text có cấu trúc
+  // 4. Phân tích từng dòng nếu Gemini liệt kê kết quả dạng text có cấu trúc
   const lineMatches = clean.matchAll(/(?:video\s*#?(\d+)|index["'\s:]*(\d+))[\s\S]*?(isRelevant|isMatch|hợp lệ|khớp|đạt)["'\s:]*(true|false|đúng|sai|có|không)/gi);
   const fallbackList = [];
   for (const m of lineMatches) {
@@ -71,6 +90,17 @@ export function safeExtractJsonArray(rawText) {
   }
   if (fallbackList.length > 0) return fallbackList;
 
+  return null;
+}
+
+export function safeExtractJsonArray(rawText) {
+  const res = safeExtractJson(rawText);
+  if (Array.isArray(res)) return res;
+  if (res && typeof res === 'object') {
+    const arr = Object.values(res).find(v => Array.isArray(v));
+    if (arr) return arr;
+    return [res];
+  }
   return null;
 }
 
@@ -260,7 +290,99 @@ TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ:
 }
 
 /**
- * 4. Thẩm định Review Shopee: Dùng Text + Ảnh chụp người mua (BỎ QUA VIDEO để tối ưu tài nguyên)
+ * 4. Tổng hợp toàn diện mô tả sản phẩm và bảng thông số kỹ thuật chi tiết từ 5 link xưởng 1688
+ * - Đóng gói thành các đoạn mô tả chi tiết: Overview, Highlights, Applications
+ * - Xuất bảng thông số kỹ thuật đầy đủ (8-12 specs)
+ * @param {Object} gemini
+ * @param {string} originalImage
+ * @param {Array<Object>} top5RawShops
+ * @param {Object} primaryOffer
+ * @returns {Promise<Object>}
+ */
+export async function synthesizeProductDetailsAndSpecs(gemini, originalImage, top5RawShops = [], primaryOffer = {}) {
+  const shopContext = top5RawShops.map((s, i) => `[Xưởng #${i + 1} - ${s.company?.name || 'Xưởng 1688'} (${s.company?.city || 'Trung Quốc'})]:
+- Tiêu đề gốc: "${s.rawTitle || s.title}"
+- Giá sỉ: ¥${s.price} (${s.priceVnd ? s.priceVnd.toLocaleString() + 'đ' : ''}) | MOQ: ${s.moq} cái | Đã bán: ${s.salesCount} cái
+- Thuộc tính xưởng: ${JSON.stringify(s.attributes || {})}`).join('\n\n');
+
+  const prompt = `
+SYSTEM: Bạn là Chuyên gia Cao Cấp về Giám Định Sản Phẩm & Technical Product Copywriter E-Commerce Quốc Tế.
+SẢN PHẨM MỤC TIÊU:
+- [Ảnh 0]: Ảnh sản phẩm gốc tham chiếu (Anchor Reference Image). Hãy quan sát kỹ kiểu dáng, chất liệu, tính năng của sản phẩm này.
+- Dữ liệu thu thập từ 5 link xưởng 1688 tốt nhất:
+${shopContext}
+
+NHIỆM VỤ BẮT BUỘC:
+Dựa vào hình ảnh [Ảnh 0] và toàn bộ thông tin từ 5 link 1688 trên, hãy phân tích toàn bộ sản phẩm và đóng gói thành:
+1. productNameVi: Tên thương phẩm chuẩn tiếng Việt (ngắn gọn, chuẩn bán hàng, ví dụ: "Bóng Đèn LED Bắp Ngô E27 / E14 Siêu Sáng Tiết Kiệm Điện 3 Chế Độ Màu").
+2. productNameEn: Tên generic tiếng Anh thương mại quốc tế (ví dụ: "E27 E14 LED Corn Bulb Super Bright Energy Saving Tri-Color Lamp").
+3. descriptionParagraphs: Các đoạn văn mô tả chi tiết, sinh động về sản phẩm:
+   - overview: Đoạn văn mô tả tổng quan sản phẩm, kiểu dáng thiết kế, cấu tạo chi tiết và cảm quan ban đầu.
+   - highlights: Đoạn văn phân tích các công năng nổi bật, đặc tính kỹ thuật vượt trội (công nghệ tản nhiệt, độ sáng 360 độ, tiết kiệm điện, độ bền linh kiện...).
+   - applications: Đoạn văn hướng dẫn ứng dụng thực tế, môi trường không gian sử dụng và đối tượng người dùng phù hợp nhất.
+4. detailedSpecs: Bảng toàn bộ thông số kỹ thuật chi tiết của sản phẩm (Object key-value gồm 8-12 trường thông số chuẩn xác như: Chủng loại sản phẩm, Chuẩn đui / Chân cắm, Điện áp hoạt động, Công suất định mức, Nhiệt độ màu / Ánh sáng, Chất liệu thân đèn, Góc chiếu sáng, Tuổi thọ bóng, Chỉ số hoàn màu CRI, Xuất xứ xưởng).
+
+TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ (không kèm văn bản ngoài JSON):
+{
+  "productNameVi": "...",
+  "productNameEn": "...",
+  "descriptionParagraphs": {
+    "overview": "...",
+    "highlights": "...",
+    "applications": "..."
+  },
+  "detailedSpecs": {
+    "Chủng loại sản phẩm": "...",
+    "Chuẩn đui / Chân cắm": "...",
+    "Điện áp hoạt động": "...",
+    "Công suất định mức": "...",
+    "Chế độ ánh sáng": "...",
+    "Chất liệu cấu tạo": "...",
+    "Góc chiếu sáng": "...",
+    "Tuổi thọ bóng": "...",
+    "Xuất xứ xưởng": "..."
+  }
+}
+`.trim();
+
+  try {
+    const res = await callGeminiVisionBatch(gemini, prompt, originalImage ? [originalImage] : []);
+    if (res && typeof res === 'object' && !Array.isArray(res) && res.descriptionParagraphs) {
+      return res;
+    }
+    if (Array.isArray(res) && res[0] && typeof res[0] === 'object' && res[0].descriptionParagraphs) {
+      return res[0];
+    }
+  } catch (err) {
+    logger.warn('STEP 3', `Gemini tổng hợp thông tin sản phẩm: ${err.message}. Tiếp tục với bộ sinh nội dung tự động.`);
+  }
+
+  // Intelligent Fallback nếu Gemini không trả về JSON
+  const top = primaryOffer || top5RawShops[0] || {};
+  return {
+    productNameVi: top.title || 'Sản phẩm hoàn thiện cao cấp',
+    productNameEn: 'High Quality Commercial Product',
+    descriptionParagraphs: {
+      overview: `Sản phẩm "${top.title || 'Sản phẩm chất lượng cao'}" được cung ứng trực tiếp từ hệ thống xưởng chuyên sâu 1688 (${top.company?.name || 'Xưởng đầu nguồn'}), sở hữu kết cấu hoàn thiện cao và độ bền vượt trội.`,
+      highlights: `Mức giá sỉ cạnh tranh từ ${top.priceFormatted || ('¥' + (top.price || 0))} (MOQ: ${top.moq || 1} cái), sản lượng xuất xưởng lớn đạt ${top.salesCount || 0} sản phẩm/tháng, đảm bảo độ ổn định và tiêu chuẩn chất lượng.`,
+      applications: `Thiết kế tối ưu phù hợp cho cả nhu cầu tiêu dùng gia đình và phân phối bán lẻ đa kênh tại Đông Nam Á (Shopee PH, TikTok Shop).`
+    },
+    detailedSpecs: {
+      'Chủng loại sản phẩm': top.title || 'Thiết bị điện tử / Gia dụng',
+      'Mã xưởng cung cấp': String(top.offerId || '1688'),
+      'Giá sỉ tham chiếu': top.priceFormatted || (`¥` + (top.price || 0)),
+      'Số lượng đặt tối thiểu (MOQ)': `${top.moq || 1} cái`,
+      'Doanh số bán xưởng': `${top.salesCount || 0} sản phẩm/tháng`,
+      'Đơn vị sản xuất': top.company?.name || 'Nhà xưởng 1688',
+      'Khu vực công xưởng': `${top.company?.city || ''} ${top.company?.province || ''}`.trim() || 'Trung Quốc',
+      'Độ tin cậy xưởng': top.company?.isSuperFactory ? 'Xưởng Siêu Cấp (Super Factory)' : 'Xưởng Chuyên Nghiệp',
+      'Tiêu chuẩn xuất khẩu': 'Đạt chuẩn đóng gói thương mại quốc tế'
+    }
+  };
+}
+
+/**
+ * 5. Thẩm định Review Shopee: Dùng Text + Ảnh chụp người mua (BỎ QUA VIDEO để tối ưu tài nguyên)
  * @param {Object} gemini
  * @param {string} anchorImage
  * @param {Array<Object>} rawReviews - Mảng review [{ author, comment, images }]

@@ -44,9 +44,9 @@ export function resetVerticalFeedUI() {
   if (feed1688Pill) feed1688Pill.textContent = '0 Shop';
   if (feed1688Sub) feed1688Sub.textContent = 'Đang chuẩn bị tìm kiếm...';
 
-  if (feedCleanContent) feedCleanContent.innerHTML = '<div class="wf-feed-empty-hint">Chưa có dữ liệu sau lọc rác...</div>';
-  if (feedCleanPill) feedCleanPill.textContent = 'Chờ lọc';
-  if (feedCleanSub) feedCleanSub.textContent = 'Đang chờ lọc rác xưởng...';
+  if (feedCleanContent) feedCleanContent.innerHTML = '<div class="wf-feed-empty-hint">Chưa có dữ liệu mô tả & 5 link 1688...</div>';
+  if (feedCleanPill) feedCleanPill.textContent = 'Chờ xử lý';
+  if (feedCleanSub) feedCleanSub.textContent = 'Đang chờ đóng gói mô tả, thông số và lưu dữ liệu 5 link thô 1688...';
 
   if (feedKwContent) feedKwContent.innerHTML = '<div class="wf-feed-empty-hint">Chưa có từ khóa Gemini...</div>';
   if (feedKwPill) feedKwPill.textContent = '0 Từ Khóa';
@@ -65,6 +65,7 @@ export function resetVerticalFeedUI() {
 
 
 export const feedUiState = {
+  clean1688ViewMode: 'specs', // 'specs' | 'raw5'
   shopeeViewMode: 'verified', // 'verified' | 'raw'
   tiktokViewMode: 'verified', // 'verified' | 'raw'
   cachedState: null
@@ -77,7 +78,10 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
     if (!btn) return;
     const type = btn.getAttribute('data-type');
     const mode = btn.getAttribute('data-mode');
-    if (type === 'shopee') {
+    if (type === 'clean1688') {
+      feedUiState.clean1688ViewMode = mode;
+      if (feedUiState.cachedState) renderFeed1688Clean(feedUiState.cachedState);
+    } else if (type === 'shopee') {
       feedUiState.shopeeViewMode = mode;
       if (feedUiState.cachedState) renderFeedShopeePh(feedUiState.cachedState);
     } else if (type === 'tiktok') {
@@ -193,48 +197,153 @@ function renderFeed1688Clean(state) {
 
   if (feedCleanContent && state.cleaned1688) {
     const c = state.cleaned1688;
-    const top = state.primaryOfferDetail || state.valid1688Shops?.[0] || {};
-    if (feedCleanPill) feedCleanPill.textContent = 'Đã Lọc Sạch';
-    if (feedCleanSub) feedCleanSub.textContent = `Đã loại bỏ số ĐT TQ, WeChat xưởng và chuẩn hóa thông số`;
+    const raw5 = c.top5RawShops || state.valid1688Shops || [];
+    const isRawMode = feedUiState.clean1688ViewMode === 'raw5';
+    const specCount = Object.keys(c.attributes || c.detailedSpecs || {}).length;
 
-    const cleanAttrsList = Object.entries(c.attributes || {}).map(([k, v]) => `
-      <span style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-right: 4px; margin-bottom: 3px; font-size: 10px;">
-        <strong style="color: #a78bfa;">${escapeHtml(k)}:</strong> <span style="color: #e2e8f0;">${escapeHtml(v)}</span>
-      </span>
-    `).join('') || '<span style="color: #94a3b8;">Đã chuẩn hóa thông số</span>';
+    if (feedCleanPill) {
+      feedCleanPill.textContent = isRawMode ? `5 Link Xưởng Thô` : `Mô Tả & ${specCount} Specs`;
+    }
+    if (feedCleanSub) {
+      feedCleanSub.textContent = isRawMode
+        ? `Toàn bộ dữ liệu thô đối chiếu từ 5 link xưởng 1688 tốt nhất được chọn`
+        : `Đã đóng gói mô tả chi tiết sản phẩm và bảng thông số toàn diện (${specCount} thông số)`;
+    }
 
-    feedCleanContent.innerHTML = `
-      <div class="wf-clean-offer-banner">
-        <img src="${top.imageUrl || DEFAULT_IMAGE_SVG}" class="wf-clean-offer-img" onerror="this.src='${DEFAULT_IMAGE_SVG}'" />
-        <div class="wf-clean-offer-details">
-          <div style="font-size: 11px; font-weight: bold; color: #34d399; margin-bottom: 2px;">
-            ✅ Offer Đại Diện Đã Thẩm Định & Làm Sạch (ID: ${top.offerId || '1688'})
-          </div>
-          <div class="wf-insp-row">
-            <span class="wf-insp-key" style="min-width: 80px; color: #f87171;">Tiêu đề gốc:</span>
-            <span class="wf-insp-val" style="color: #94a3b8; text-decoration: line-through;">${escapeHtml(top.title || 'N/A')}</span>
-          </div>
-          <div class="wf-insp-row">
-            <span class="wf-insp-key" style="min-width: 80px; color: #34d399;">Sau lọc sạch:</span>
-            <span class="wf-insp-val" style="color: #67e8f9; font-weight: bold;">${escapeHtml(c.title || top.title)}</span>
-          </div>
-          <div class="wf-insp-row">
-            <span class="wf-insp-key" style="min-width: 80px;">Giá sỉ chuẩn:</span>
-            <span class="wf-insp-val" style="color: #34d399; font-weight: bold;">¥${c.basePrice || top.price || 'N/A'} (Tối thiểu: ${top.moq || 1} cái)</span>
-          </div>
-          <div class="wf-tag-cloud" style="margin-top: 4px;">
-            <span class="wf-noise-tag">❌ Đã lọc SĐT Trung Quốc</span>
-            <span class="wf-noise-tag">❌ Đã lọc WeChat xưởng</span>
-            <span class="wf-noise-tag">❌ Đã lọc Địa chỉ xưởng TQ</span>
-            <span class="wf-noise-tag">❌ Đã gọt lời chào mời sỉ</span>
-          </div>
-          <div style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 4px;">
-            <div style="color: #a78bfa; font-weight: bold; margin-bottom: 2px;">Thuộc tính chuẩn giữ lại (${Object.keys(c.attributes || {}).length}):</div>
-            <div style="line-height: 1.4;">${cleanAttrsList}</div>
-          </div>
+    const toggleHtml = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 11px; font-weight: bold; color: #e2e8f0;">
+          ${isRawMode ? `🏭 Dữ Liệu Thô 5 Link Xưởng 1688 Đầu Nguồn (${raw5.length} xưởng)` : `📋 Mô Tả Chi Tiết & Bảng Thông Số Kỹ Thuật`}
+        </div>
+        <div class="wf-feed-toggle-group">
+          <button class="wf-feed-toggle-btn ${!isRawMode ? 'active' : ''}" data-type="clean1688" data-mode="specs">📝 Mô Tả & Specs</button>
+          <button class="wf-feed-toggle-btn ${isRawMode ? 'active' : ''}" data-type="clean1688" data-mode="raw5">🏭 5 Link Thô 1688 (${raw5.length})</button>
         </div>
       </div>
     `;
+
+    let bodyHtml = '';
+
+    if (isRawMode) {
+      // TAB 2: DỮ LIỆU THÔ 5 LINK XƯỞNG 1688
+      bodyHtml = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${raw5.map((s, idx) => {
+            const rawTitle = escapeHtml(s.rawTitle || s.title || 'Sản phẩm 1688');
+            const priceTxt = s.priceFormatted || (`¥` + (s.price || 0));
+            const priceVndTxt = s.priceFormattedVnd || (s.priceVnd ? `${Number(s.priceVnd).toLocaleString()} ₫` : '');
+            const factory = escapeHtml(s.company?.name || 'Nhà xưởng 1688');
+            const city = escapeHtml(s.company?.city || s.company?.province || 'Trung Quốc');
+            const directUrl = s.detailUrl || (s.offerId ? `https://detail.1688.com/offer/${s.offerId}.html` : '#');
+            const isSuper = !!s.company?.isSuperFactory;
+
+            return `
+            <div style="display: flex; gap: 10px; background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px; position: relative;">
+              <div style="position: relative; width: 75px; height: 75px; flex-shrink: 0; background: #0b0f19; border-radius: 4px; overflow: hidden;">
+                <img src="${s.imageUrl || DEFAULT_IMAGE_SVG}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_IMAGE_SVG}'" loading="lazy" />
+                <span style="position:absolute; top:2px; left:2px; background:rgba(234,88,12,0.9); color:#fff; font-size:9px; font-weight:bold; padding:1px 4px; border-radius:3px;">#${idx + 1}</span>
+              </div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 11px; font-weight: bold; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${rawTitle}">
+                    #${idx + 1}. ${rawTitle}
+                  </div>
+                  <div style="font-size: 9.5px; color: #94a3b8; margin-top: 2px;">
+                    🏭 <strong>${factory}</strong> (${city}) ${isSuper ? '<span style="color:#fbbf24; font-weight:bold;">★ Siêu Xưởng</span>' : ''}
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px;">
+                  <div>
+                    <span style="font-size: 12px; font-weight: bold; color: #34d399;">${priceTxt}</span>
+                    <span style="font-size: 9.5px; color: #94a3b8; margin-left: 3px;">(${priceVndTxt})</span>
+                    <span style="font-size: 9px; color: #cbd5e1; margin-left: 6px;">| MOQ: <strong>${s.moq || 1} cái</strong> | Bán: <strong>${s.salesCount || 0}</strong></span>
+                  </div>
+                  <a href="${directUrl}" target="_blank" style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; font-size: 9.5px; font-weight: bold; padding: 2px 8px; border-radius: 4px; text-decoration: none;">
+                    Mở 1688 ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    } else {
+      // TAB 1: MÔ TẢ CHI TIẾT SẢN PHẨM & BẢNG THÔNG SỐ TOÀN DIỆN
+      const specs = c.detailedSpecs || c.attributes || {};
+      const paragraphs = c.descriptionParagraphs || {};
+
+      bodyHtml = `
+        <!-- 1. Thẻ Banner Sản Phẩm Đại Diện -->
+        <div class="wf-clean-offer-banner">
+          <img src="${c.imageUrl || DEFAULT_IMAGE_SVG}" class="wf-clean-offer-img" onerror="this.src='${DEFAULT_IMAGE_SVG}'" />
+          <div class="wf-clean-offer-details">
+            <div style="font-size: 12px; font-weight: bold; color: #38bdf8; margin-bottom: 2px;">
+              🏷️ ${escapeHtml(c.productNameVi || c.title)}
+            </div>
+            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">
+              🌐 Tên quốc tế: <em style="color: #cbd5e1;">${escapeHtml(c.productNameEn || 'N/A')}</em>
+            </div>
+            <div style="display: flex; gap: 12px; font-size: 11px; margin-bottom: 4px; flex-wrap: wrap;">
+              <span>Giá sỉ: <strong style="color: #34d399;">${c.priceFormatted || ('¥' + c.basePrice)}</strong> (~${c.priceFormattedVnd || 'N/A'})</span>
+              <span>Tối thiểu (MOQ): <strong style="color: #fb923c;">${c.moq || 1} cái</strong></span>
+              <span>Đã bán xưởng: <strong style="color: #a78bfa;">${c.salesCount || 0} cái/tháng</strong></span>
+            </div>
+            <div class="wf-tag-cloud" style="margin-top: 2px;">
+              <span class="wf-noise-tag">❌ Đã lọc SĐT Trung Quốc</span>
+              <span class="wf-noise-tag">❌ Đã lọc WeChat xưởng</span>
+              <span class="wf-noise-tag">❌ Đã lọc Địa chỉ công xưởng</span>
+              <span class="wf-noise-tag">❌ Đã gọt lời chào mời sỉ</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Các Đoạn Mô Tả Chi Tiết Sản Phẩm -->
+        <div style="margin-top: 8px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px;">
+          <div style="color: #38bdf8; font-weight: bold; font-size: 11px; margin-bottom: 6px;">
+            📝 Các Đoạn Mô Tả Chi Tiết Về Sản Phẩm:
+          </div>
+          
+          <div style="margin-bottom: 8px;">
+            <div style="font-size: 10.5px; font-weight: bold; color: #fbbf24;">🌟 1. Tổng Quan & Cấu Tạo Sản Phẩm:</div>
+            <div style="font-size: 11px; color: #e2e8f0; line-height: 1.5; margin-top: 2px; text-align: justify;">
+              ${escapeHtml(paragraphs.overview || `Sản phẩm ${c.title} sở hữu thiết kế chuẩn hóa, gia công trực tiếp tại xưởng chuyên sâu 1688 với độ hoàn thiện cao.`)}
+            </div>
+          </div>
+
+          <div style="margin-bottom: 8px;">
+            <div style="font-size: 10.5px; font-weight: bold; color: #34d399;">⚡ 2. Đặc Tính Kỹ Thuật & Công Năng Nổi Bật:</div>
+            <div style="font-size: 11px; color: #e2e8f0; line-height: 1.5; margin-top: 2px; text-align: justify;">
+              ${escapeHtml(paragraphs.highlights || `Thiết kế tối ưu hiệu suất, linh kiện bền bỉ, tiết kiệm năng lượng và đạt tiêu chuẩn an toàn kỹ thuật.`)}
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 10.5px; font-weight: bold; color: #a78bfa;">🎯 3. Ứng Dụng Thực Tế & Không Gian Sử Dụng:</div>
+            <div style="font-size: 11px; color: #e2e8f0; line-height: 1.5; margin-top: 2px; text-align: justify;">
+              ${escapeHtml(paragraphs.applications || `Phù hợp sử dụng trong đời sống gia đình, chiếu sáng dân dụng, văn phòng và các kênh bán lẻ thương mại điện tử.`)}
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Bảng Toàn Bộ Thông Số Kỹ Thuật -->
+        <div style="margin-top: 8px; background: rgba(15,23,42,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px;">
+          <div style="color: #a78bfa; font-weight: bold; font-size: 11px; margin-bottom: 6px;">
+            📊 Bảng Toàn Bộ Thông Số Kỹ Thuật Chi Tiết (${Object.keys(specs).length} thông số):
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px;">
+            ${Object.entries(specs).map(([k, v]) => `
+              <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 4px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #94a3b8; font-weight: 600;">${escapeHtml(k)}:</span>
+                <span style="color: #67e8f9; font-weight: bold; text-align: right; margin-left: 6px;">${escapeHtml(v)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    feedCleanContent.innerHTML = toggleHtml + bodyHtml;
   }
 }
 
