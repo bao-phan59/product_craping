@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "SDK Utility Suite - All-in-One Studio",
+  "version": "1.0.0",
+  "description": "Bàn làm việc tích hợp sử dụng trực tiếp toàn bộ 5 SDK: Gemini AI, Shopee, TikTok/Douyin, Alibaba 1688 và Google Lens (Không tự tắt, hỗ trợ Side Panel)",
+  "permissions": [
+    "sidePanel",
+    "cookies",
+    "storage",
+    "declarativeNetRequest",
+    "scripting",
+    "tabs",
+    "activeTab",
+    "contextMenus",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*",
+    "https://*.google.com/*",
+    "https://gemini.google.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://content-push.googleapis.com/*",
+    "https://lens.google.com/*",
+    "https://*.gstatic.com/*",
+    "https://*.shopee.vn/*",
+    "https://shopee.vn/*",
+    "https://*.susercontent.com/*",
+    "https://*.tiktok.com/*",
+    "https://*.douyin.com/*",
+    "https://*.1688.com/*",
+    "https://1688.com/*",
+    "https://*.alicdn.com/*"
+  ],
+  "side_panel": {
+    "default_path": "ui/index.html"
+  },
+  "action": {
+    "default_title": "Mở SDK Utility Suite Studio (Ghim Cố Định)"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "unified_cors_rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:;"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

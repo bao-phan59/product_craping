@@ -1,0 +1,281 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "set", "value": "https://gemini.google.com/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||googleusercontent.com^",
+      "resourceTypes": ["xmlhttprequest", "image", "media", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "set", "value": "https://shopee.vn/" },
+        { "header": "X-Requested-With", "operation": "set", "value": "XMLHttpRequest" },
+        { "header": "X-Shopee-Language", "operation": "set", "value": "vi" },
+        { "header": "X-API-SOURCE", "operation": "set", "value": "pc" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||shopee.vn^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "set", "value": "https://shopee.ph/" },
+        { "header": "X-Requested-With", "operation": "set", "value": "XMLHttpRequest" },
+        { "header": "X-Shopee-Language", "operation": "set", "value": "en" },
+        { "header": "X-API-SOURCE", "operation": "set", "value": "pc" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||shopee.ph^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "set", "value": "https://www.tiktok.com/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "https://www.tiktok.com" },
+        { "header": "Access-Control-Allow-Credentials", "operation": "set", "value": "true" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||tiktok.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "set", "value": "https://www.douyin.com/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||douyin.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 10,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://s.1688.com" },
+        { "header": "Referer", "operation": "set", "value": "https://s.1688.com/" },
+        { "header": "X-Requested-With", "operation": "set", "value": "XMLHttpRequest" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "https://s.1688.com" },
+        { "header": "Access-Control-Allow-Credentials", "operation": "set", "value": "true" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*.1688.com/*",
+      "excludedInitiatorDomains": ["1688.com", "www.1688.com", "s.1688.com"],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://lens.google.com/" },
+        { "header": "Origin", "operation": "set", "value": "https://lens.google.com" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||lens.google.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||gstatic.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||susercontent.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||alicdn.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||douyinpic.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||byteimg.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||pstatp.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||tiktokcdn.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "remove" },
+        { "header": "Referer", "operation": "remove" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||byteoversea.com^",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
+  }
+]

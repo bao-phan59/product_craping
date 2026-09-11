@@ -1,0 +1,12 @@
+# Standalone SDK utility repo (kept separate)
+sdk_utility/
+
+# Chrome internal extension metadata
+_metadata/
+**/_metadata/
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+node_modules/
+*.log

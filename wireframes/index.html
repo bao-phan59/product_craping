@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trình Trực Quan Wireframe Tương Tác - Chrome Extension Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0a0b10;
+      --bg-surface: #12141f;
+      --bg-card: rgba(26, 29, 46, 0.7);
+      --bg-card-hover: rgba(36, 40, 64, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: #6366f1;
+      --accent-primary: #6366f1;
+      --accent-primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      --accent-secondary: #06b6d4;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --panel-width: 420px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation Banner */
+    header.top-header {
+      background: rgba(18, 20, 31, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--accent-primary-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: white;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-quick-link {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-quick-link:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+    }
+
+    /* Main Workspace Layout */
+    .workspace-container {
+      display: grid;
+      grid-template-columns: 320px 1fr 360px;
+      flex: 1;
+      height: calc(100vh - 61px);
+      overflow: hidden;
+    }
+
+    /* Left Sidebar: Screen & State Selector */
+    aside.state-nav {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      padding: 20px 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .nav-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      padding-left: 8px;
+    }
+
+    .state-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      list-style: none;
+    }
+
+    .state-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      font-family: inherit;
+    }
+
+    .state-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+    }
+
+    .state-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+
+    .state-btn .icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
+    /* Middle Simulator Stage */
+    main.simulator-stage {
+      background: radial-gradient(circle at center 20%, #171a2b 0%, #0a0b10 100%);
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .stage-header {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .stage-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .stage-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Phone / Side-Panel Shell */
+    .side-panel-shell {
+      width: var(--panel-width);
+      min-height: 740px;
+      max-height: 840px;
+      background: #0d0f18;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(99, 102, 241, 0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Side Panel Chrome App Bar */
+    .panel-header {
+      background: rgba(26, 29, 46, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .panel-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+    }
+
+    /* Panel Body Content */
+    .panel-content {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+    }
+
+    /* Input Screen Styles */
+    .section-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #818cf8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .text-input {
+      width: 100%;
+      background: rgba(10, 11, 16, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .text-input:focus {
+      border-color: var(--border-focus);
+    }
+
+    .dropzone {
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 24px 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .dropzone.drag-active {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+      transform: scale(1.01);
+    }
+
+    .dropzone-icon {
+      font-size: 32px;
+    }
+
+    .dropzone-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .dropzone-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Loaded Image Card */
+    .loaded-image-card {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(10, 11, 16, 0.7);
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .preview-thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #1e2235;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .preview-meta {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 12px;
+    }
+
+    .preview-name {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .preview-specs {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Auto Session Status Box */
+    .session-status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .session-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+    }
+
+    .badge-status {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .badge-ready {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .badge-auto {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+    }
+
+    /* Primary Action Buttons */
+    .btn-primary {
+      width: 100%;
+      background: var(--accent-primary-gradient);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-primary:disabled {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-dim);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* Progress Screen Styles */
+    .progress-track {
+      background: rgba(255, 255, 255, 0.08);
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .progress-fill {
+      background: var(--accent-primary-gradient);
+      height: 100%;
+      width: 65%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* Stepper List */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      list-style: none;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+    }
+
+    .step-item.active {
+      background: rgba(99, 102, 241, 0.12);
+      border-color: rgba(99, 102, 241, 0.3);
+      color: #c7d2fe;
+      font-weight: 600;
+    }
+
+    .step-item.done {
+      color: var(--text-muted);
+    }
+
+    /* Live Thumbnail Ticker */
+    .ticker-wrapper {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .ticker-card {
+      min-width: 80px;
+      background: rgba(10, 11, 16, 0.8);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+
+    .ticker-img {
+      width: 54px;
+      height: 54px;
+      border-radius: 6px;
+      background: #23273e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .ticker-tag {
+      font-size: 10px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .ticker-price {
+      font-size: 10px;
+      font-weight: 600;
+      color: #34d399;
+    }
+
+    /* Mini Console Terminal */
+    .console-box {
+      background: #07080c;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #a5f3fc;
+      line-height: 1.5;
+      height: 110px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .log-line-info { color: #93c5fd; }
+    .log-line-success { color: #86efac; }
+    .log-line-warn { color: #fde047; }
+
+    /* Results Screen Styles */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .metric-title {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .metric-val {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .metric-sub {
+      font-size: 10px;
+      color: #34d399;
+    }
+
+    .tab-bar {
+      display: flex;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 4px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--bg-surface);
+      color: var(--text-main);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    .tab-content-area {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 11, 16, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background: #151827;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      padding: 20px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Right Specs Inspector */
+    aside.spec-inspector {
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-subtle);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .spec-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .spec-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .spec-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .spec-tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .spec-tag {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    .spec-details-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .spec-details-table th {
+      text-align: left;
+      padding: 6px 0;
+      color: var(--text-dim);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .spec-details-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .spec-key {
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 40%;
+    }
+
+    .spec-val {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #67e8f9;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="top-header">
+    <div class="brand-group">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-title">E-Commerce Data Pipeline • Wireframe Suite</div>
+      </div>
+      <div class="brand-badge">Manifest V3 • Interactive Prototype</div>
+    </div>
+    <div class="top-actions">
+      <a href="01_MAN_HINH_NHAP_LIEU_INPUT.md" class="btn-quick-link">📄 Đọc Docs Markdown</a>
+      <a href="05_SO_DO_LUONG_TUONG_TAC_USER_FLOW.md" class="btn-quick-link">🗺️ User Flow & Matrix</a>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="workspace-container">
+
+    <!-- Left Sidebar: All Wireframe States -->
+    <aside class="state-nav">
+      
+      <div>
+        <div class="nav-section-title">1. Màn Hình Nhập Liệu (Input)</div>
+        <ul class="state-list">
+          <li>
+            <button class="state-btn active" onclick="switchState('state-1-1')">
+              <span class="icon">⚪</span> 1.1 Mặc định ban đầu
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-1-2')">
+              <span class="icon">📥</span> 1.2 Kéo thả ảnh (Drag-over)
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-1-3')">
+              <span class="icon">🔗</span> 1.3 Nhập bằng URL ảnh
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-1-4')">
+              <span class="icon">🚀</span> 1.4 Đã nạp ảnh & Sẵn sàng
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-1-5')">
+              <span class="icon">⚙️</span> 1.5 Drawer Cài đặt & Tab
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-section-title">2. Tiến Trình & Live Logs</div>
+        <ul class="state-list">
+          <li>
+            <button class="state-btn" onclick="switchState('state-2-1')">
+              <span class="icon">⏳</span> 2.1 Đang chạy (Ticker & Console)
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-2-2')">
+              <span class="icon">🔍</span> 2.2 Hàng ngách (100% Keywords)
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-2-3')">
+              <span class="icon">🎬</span> 2.3 TikTok Lazy-load theo Tym
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-2-4')">
+              <span class="icon">⏸️</span> 2.4 Trạng thái Tạm dừng
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-2-5')">
+              <span class="icon">⏹️</span> 2.5 Modal Xác nhận Hủy
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-section-title">3. Kết Quả & Xuất File</div>
+        <ul class="state-list">
+          <li>
+            <button class="state-btn" onclick="switchState('state-3-1')">
+              <span class="icon">🎉</span> 3.1 Dashboard Tổng hợp
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-3-2')">
+              <span class="icon">🎬</span> 3.2 Tab 1: Video theo Tym
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-3-3')">
+              <span class="icon">⭐</span> 3.3 Tab 2: 10 Review 5★ Media
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-3-4')">
+              <span class="icon">📊</span> 3.4 Tab 3: Specs & Bảng giá
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-3-5')">
+              <span class="icon">📋</span> 3.5 Modal Copy Excel 24 Cột
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-section-title">4. Trạng Thái Ngoại Lệ</div>
+        <ul class="state-list">
+          <li>
+            <button class="state-btn" onclick="switchState('state-4-1')">
+              <span class="icon">🛡️</span> 4.1 Cảnh báo Captcha Slider
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-4-2')">
+              <span class="icon">📡</span> 4.2 Lỗi mất kết nối mạng
+            </button>
+          </li>
+          <li>
+            <button class="state-btn" onclick="switchState('state-4-3')">
+              <span class="icon">🌊</span> 4.3 Hàng siêu ngách (0 đối thủ)
+            </button>
+          </li>
+        </ul>
+      </div>
+
+    </aside>
+
+    <!-- Center Stage: Chrome Side-Panel Simulator -->
+    <main class="simulator-stage">
+      
+      <div class="stage-header">
+        <div class="stage-title" id="stageTitle">Màn Hình 1.1: Trạng Thái Mặc Định Ban Đầu</div>
+        <div class="stage-desc" id="stageDesc">Mô phỏng Side-Panel Chrome Extension (420px x 100vh) với đầy đủ hiệu ứng Glassmorphism.</div>
+      </div>
+
+      <!-- Side-Panel Simulator Box -->
+      <div class="side-panel-shell" id="panelShell">
+        
+        <!-- Header of Extension -->
+        <div class="panel-header">
+          <div class="panel-header-title">
+            <span style="color:#818cf8;">⚡</span>
+            <span>DATA PIPELINE</span>
+            <span style="font-size:10px; color:#94a3b8; font-weight:normal;">v1.0.0</span>
+          </div>
+          <div class="panel-header-actions">
+            <button class="icon-btn" title="Cài đặt" onclick="switchState('state-1-5')">⚙️</button>
+            <button class="icon-btn" title="Đóng">✕</button>
+          </div>
+        </div>
+
+        <!-- Dynamic Body Content Rendered Here -->
+        <div class="panel-content" id="panelBody">
+          <!-- Injected via JavaScript -->
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Right Sidebar: Specs & Event Handlers -->
+    <aside class="spec-inspector">
+      <div class="spec-header">
+        <div class="spec-title" id="specTitle">Chi Tiết Kỹ Thuật (Specs)</div>
+        <div class="spec-desc" id="specDesc">Thông số chi tiết các phần tử DOM, ID, các hàm lắng nghe sự kiện và luồng dữ liệu ngầm tương ứng với trạng thái đang chọn.</div>
+        <div class="spec-tag-list" id="specTags">
+          <span class="spec-tag">#app</span>
+          <span class="spec-tag">DOM Ready</span>
+        </div>
+      </div>
+
+      <div>
+        <table class="spec-details-table">
+          <thead>
+            <tr>
+              <th>Thuộc tính</th>
+              <th>Giá trị đặc tả</th>
+            </tr>
+          </thead>
+          <tbody id="specTableBody">
+            <!-- Injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    // State Store and Definitions
+    const STATES = {
+      'state-1-1': {
+        title: 'Màn Hình 1.1: Trạng Thái Mặc Định Ban Đầu',
+        desc: 'Người dùng vừa mở Extension. Chưa chọn ảnh, chưa nhập SKU, nút Bắt Đầu bị disabled.',
+        tags: ['Screen 1', 'Input', 'Initial State', 'Auto-tabs Check'],
+        specs: [
+          ['Container ID', '#inputScreen'],
+          ['Dropzone ID', '#dropZone'],
+          ['SKU Input ID', '#inputProductSku'],
+          ['Start Button', '#btnStartPipeline (disabled=true)'],
+          ['Tác vụ nền', 'chrome.tabs.query() kiểm tra session 1688, Shopee, TikTok, Gemini']
+        ],
+        render: () => `
+          <div class="section-box">
+            <div class="section-label">1. HÌNH ẢNH SẢN PHẨM GỐC *</div>
+            <input type="text" class="text-input" placeholder="🔗 Nhập link URL ảnh sản phẩm...">
+            <div style="text-align:center; font-size:11px; color:#64748b;">— HOẶC —</div>
+            <div class="dropzone" onclick="switchState('state-1-2')">
+              <div class="dropzone-icon">📁</div>
+              <div class="dropzone-text">Kéo thả file ảnh sản phẩm vào đây</div>
+              <div class="dropzone-hint">Hỗ trợ JPG, PNG, WEBP (Tối đa 10MB)</div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label">2. ĐỊNH DANH SẢN PHẨM *</div>
+            <input type="text" class="text-input" placeholder="🏷️ Nhập mã sản phẩm (SKU)...">
+            <div style="font-size:11px; color:#64748b;">ℹ️ SKU dùng để đặt tên file tải về: {SKU}.zip</div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label">3. KẾT NỐI PHIÊN TỰ ĐỘNG (SESSION PRE-CHECK)</div>
+            <div class="session-status-list">
+              <div class="session-row">
+                <span>🟢 1688.com:</span>
+                <span class="badge-status badge-ready">Đã mở tab</span>
+              </div>
+              <div class="session-row">
+                <span>🟢 Shopee PH:</span>
+                <span class="badge-status badge-ready">Đã mở tab</span>
+              </div>
+              <div class="session-row">
+                <span>⚡ TikTok / Douyin:</span>
+                <span class="badge-status badge-auto">🚀 Tự mở ngầm</span>
+              </div>
+              <div class="session-row">
+                <span>🟢 Gemini AI:</span>
+                <span class="badge-status badge-ready">Sẵn sàng</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-primary" disabled>
+            <span>🚀 BẮT ĐẦU CHẠY PIPELINE</span>
+          </button>
+        `
+      },
+
+      'state-1-2': {
+        title: 'Màn Hình 1.2: Đang Kéo Thả Ảnh (Drag-Over)',
+        desc: 'Người dùng đang kéo file ảnh vào vùng dropzone. Viền phát sáng Neon Cyan, sẵn sàng nhận file.',
+        tags: ['Screen 1', 'Dropzone', 'DragOver Event', 'Neon Glow'],
+        specs: [
+          ['Sự kiện lắng nghe', 'dragenter, dragover, dragleave, drop'],
+          ['CSS Class kích hoạt', '.dropzone.drag-active'],
+          ['Tác vụ khi Drop', 'e.dataTransfer.files[0] -> FileReader()']
+        ],
+        render: () => `
+          <div class="section-box">
+            <div class="section-label">1. HÌNH ẢNH SẢN PHẨM GỐC *</div>
+            <div class="dropzone drag-active" onclick="switchState('state-1-4')">
+              <div class="dropzone-icon" style="color:#38bdf8;">📥</div>
+              <div class="dropzone-text" style="color:#38bdf8;">THẢ TẬP TIN ẢNH VÀO ĐÂY NGAY!</div>
+              <div class="dropzone-hint" style="color:#7dd3fc;">Click hoặc thả chuột để nạp file mô phỏng</div>
+            </div>
+          </div>
+          <button class="btn-primary" disabled>🚀 BẮT ĐẦU CHẠY PIPELINE</button>
+        `
+      },
+
+      'state-1-3': {
+        title: 'Màn Hình 1.3: Nhập Ảnh Bằng Đường Dẫn URL',
+        desc: 'Người dùng dán link ảnh trực tiếp từ website. Hệ thống fetch blob và tải mini thumbnail xem trước.',
+        tags: ['Screen 1', 'URL Input', 'Fetch Blob', 'Validation'],
+        specs: [
+          ['Input Element', '#inputImageUrl'],
+          ['Fetch Handler', 'fetch(url).then(res => res.blob())'],
+          ['Validation', 'Kiểm tra Content-Type: image/*']
+        ],
+        render: () => `
+          <div class="section-box">
+            <div class="section-label">1. HÌNH ẢNH SẢN PHẨM GỐC (URL MODE)</div>
+            <input type="text" class="text-input" value="https://cbu01.alicdn.com/img/ibank/O1CN01..." style="border-color:#38bdf8;">
+            <div style="font-size:12px; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+              <span>⏳ Đang tải và kiểm tra ảnh từ URL... 85%</span>
+            </div>
+          </div>
+          <button class="btn-primary" disabled>🚀 BẮT ĐẦU CHẠY PIPELINE</button>
+        `
+      },
+
+      'state-1-4': {
+        title: 'Màn Hình 1.4: Đã Nạp Ảnh & Sẵn Sàng Kích Hoạt',
+        desc: 'Đã có ảnh preview chuẩn HD và mã SKU hợp lệ. Nút Start phát sáng Gradient, sẵn sàng click để chạy.',
+        tags: ['Screen 1', 'Ready State', 'Button Enabled', 'Form Validated'],
+        specs: [
+          ['Ảnh nạp', 'shoe_master_01.jpg (1024x1024px, 246KB)'],
+          ['Mã SKU', 'SHOEAIRMAX2026BLK (Hợp lệ)'],
+          ['Start Action', 'onClick -> runPipeline() -> Chuyển sang Screen 2']
+        ],
+        render: () => `
+          <div class="section-box">
+            <div class="section-label">1. HÌNH ẢNH SẢN PHẨM GỐC *</div>
+            <div class="loaded-image-card">
+              <div class="preview-thumb">👟</div>
+              <div class="preview-meta">
+                <div class="preview-name">shoe_master_01.jpg</div>
+                <div class="preview-specs">1024 x 1024 px • 246 KB • JPG</div>
+                <div style="color:#34d399; font-size:11px; font-weight:600;">✅ Đã nạp thành công</div>
+              </div>
+              <button class="icon-btn" title="Gỡ ảnh" onclick="switchState('state-1-1')">🗑️</button>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label">2. ĐỊNH DANH SẢN PHẨM *</div>
+            <input type="text" class="text-input" value="SHOEAIRMAX2026BLK" style="font-weight:700; color:#a5b4fc; border-color:#818cf8;">
+            <div style="font-size:11px; color:#34d399;">✅ Mã SKU hợp lệ (17 ký tự)</div>
+          </div>
+
+          <button class="btn-primary" onclick="switchState('state-2-1')">
+            <span>🚀 BẮT ĐẦU CHẠY PIPELINE NGAY</span>
+          </button>
+        `
+      },
+
+      'state-1-5': {
+        title: 'Màn Hình 1.5: Drawer Cài Đặt & Quản Lý Phiên',
+        desc: 'Drawer trượt từ bên phải cho phép cấu hình tự động mở tab ngầm và số lượng shop mục tiêu.',
+        tags: ['Drawer', 'Settings', 'Auto-Tabs', 'Config'],
+        specs: [
+          ['Drawer Element', '#settingsDrawer'],
+          ['Tùy chọn', 'Auto-tab (active: false), Target shops (5), Niche scan (100%)'],
+          ['Lưu trữ', 'chrome.storage.local.set({ settings })']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#818cf8;">
+            <div class="section-label">⚙️ CÀI ĐẶT & QUẢN LÝ PHIÊN NỀN</div>
+            <div style="font-size:12px; display:flex; flex-direction:column; gap:8px;">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" checked> Tự động mở tab nếu thiếu (chạy ngầm)
+              </label>
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" checked> Giữ nguyên tab sau khi hoàn tất
+              </label>
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" checked> Hàng ngách Shopee: Quét 100% từ khóa
+              </label>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label">CẤU HÌNH MỤC TIÊU CÀO</div>
+            <div style="font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+              <span>Số shop 1688 mục tiêu:</span>
+              <span style="font-weight:700; color:#38bdf8;">5 shop</span>
+            </div>
+            <div style="font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+              <span>Số shop Shopee mục tiêu:</span>
+              <span style="font-weight:700; color:#38bdf8;">5 shop</span>
+            </div>
+            <div style="font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+              <span>Review Shopee 5★ có media:</span>
+              <span style="font-weight:700; color:#38bdf8;">10 review</span>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="switchState('state-1-4')">
+            <span>💾 LƯU THIẾT LẬP & QUAY LẠI</span>
+          </button>
+        `
+      },
+
+      'state-2-1': {
+        title: 'Màn Hình 2.1: Tiến Trình & Live Ticker Đang Chạy',
+        desc: 'Pipeline đang thực hiện 10 bước. Ticker trượt ngang ảnh sản phẩm vừa khớp theo thời gian thực.',
+        tags: ['Screen 2', 'Running', 'Stepper 10', 'Live Ticker', 'Mini Logs'],
+        specs: [
+          ['Thanh tiến trình', '#pipelineProgressBar (65%)'],
+          ['Ticker ID', '#liveThumbnailTicker'],
+          ['Terminal Mini', '#liveMiniLogs'],
+          ['Nút hành động', '[Tạm dừng] -> pause, [Hủy bỏ] -> confirm modal']
+        ],
+        render: () => `
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span style="font-weight:700; color:#818cf8;">TIẾN ĐỘ TỔNG THỂ: 65%</span>
+              <span style="color:#94a3b8; font-family:var(--font-mono);">⏱️ 00:42</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width:65%;"></div>
+            </div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Đang thực hiện: Bước 6/10 - Lọc 10 review 5★ có media Shopee (8/10)...</div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label">🔴 LIVE THUMBNAIL TICKER (KẾT QUẢ VỪA KHỚP)</div>
+            <div class="ticker-wrapper">
+              <div class="ticker-card">
+                <div class="ticker-img">👟</div>
+                <div class="ticker-tag">1688 #1</div>
+                <div class="ticker-price">¥42.50</div>
+              </div>
+              <div class="ticker-card">
+                <div class="ticker-img">👟</div>
+                <div class="ticker-tag">1688 #2</div>
+                <div class="ticker-price">¥44.00</div>
+              </div>
+              <div class="ticker-card">
+                <div class="ticker-img">👟</div>
+                <div class="ticker-tag">Shopee #1</div>
+                <div class="ticker-price">₱389</div>
+              </div>
+              <div class="ticker-card">
+                <div class="ticker-img">👟</div>
+                <div class="ticker-tag">Shopee #2</div>
+                <div class="ticker-price">₱410</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-label" style="display:flex; justify-content:space-between;">
+              <span>NHẬT KÝ THỰC THI TRỰC TIẾP</span>
+              <span style="cursor:pointer; color:#38bdf8;" onclick="switchState('state-2-2')">▶ Hàng ngách</span>
+            </div>
+            <div class="console-box">
+              <div class="log-line-success">[21:40:12] [1688] Đã tìm thấy 5 shop xưởng uy tín.</div>
+              <div class="log-line-info">[21:40:18] [GEMINI] Đã dịch & sinh 5 cụm từ khóa Shopee.</div>
+              <div class="log-line-info">[21:40:29] [SHOPEE] Đã khớp 5 shop đối sánh (₱389 - ₱420).</div>
+              <div class="log-line-warn">[21:40:42] [SHOPEE] Cào review shop #2: Đạt 8/10 đánh giá có media...</div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button class="state-btn" style="background:#1e2238; justify-content:center;" onclick="switchState('state-2-4')">⏸️ Tạm dừng</button>
+            <button class="state-btn" style="background:#2a1a24; color:#f87171; justify-content:center;" onclick="switchState('state-2-5')">⏹️ Hủy bỏ</button>
+          </div>
+        `
+      },
+
+      'state-2-2': {
+        title: 'Màn Hình 2.2: Xử Lý Hàng Ngách (Niche Product Fallback)',
+        desc: 'Shopee ít đối thủ bán. Hệ thống bắt buộc quét qua 100% bộ từ khóa trước khi dừng ở số lượng thực tế.',
+        tags: ['Screen 2', 'Niche Product', '100% Keywords', 'Fallback'],
+        specs: [
+          ['Chế độ', 'Niche Product Keyword Fallback Scan'],
+          ['Quy tắc', 'Phải quét hết 5/5 keyword Gemini sinh ra, không dừng ở keyword đầu tiên']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#f59e0b;">
+            <div class="section-label" style="color:#fbbf24;">⚠️ CHẾ ĐỘ HÀNG NGÁCH: QUÉT 100% BỘ TỪ KHÓA</div>
+            <div style="font-size:12px; color:#fde68a;">
+              Sản phẩm ít đối thủ. Hệ thống cam kết quét hết toàn bộ 5 từ khóa trước khi chốt kết quả:
+            </div>
+            <div style="font-size:11px; display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+              <div>✅ Keyword 1: "breathable running sneakers" ➔ 1 shop</div>
+              <div>✅ Keyword 2: "cushioned athletic trainers" ➔ 0 shop</div>
+              <div>✅ Keyword 3: "lightweight mesh sport shoes" ➔ 1 shop</div>
+              <div style="color:#38bdf8; font-weight:600;">⏳ Keyword 4: "korean casual jogging" ➔ Đang quét...</div>
+              <div style="color:#64748b;">⚪ Keyword 5: "non-slip outdoor activewear" ➔ Chờ quét</div>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="switchState('state-2-3')">Tiếp tục sang TikTok Lazy-load ➔</button>
+        `
+      },
+
+      'state-2-3': {
+        title: 'Màn Hình 2.3: TikTok Lazy-Load Phân Trang Theo Lượt Tym',
+        desc: 'Thu thập video theo API Search Cursor. Ngắt khi has_more == false và phân loại tên theo lượt Tym.',
+        tags: ['Screen 2', 'TikTok', 'Douyin', 'has_more', 'Tym Naming'],
+        specs: [
+          ['API Search Endpoint', '/api/search/general/full/ hoặc /aweme/v1/web/search/item/'],
+          ['Điều kiện dừng', 'has_more == false (hoặc 0) hoặc lặp video ID'],
+          ['Quy ước đặt tên', '{likeCount}tym_{index} (Ví dụ: 310tym_1, 1500tym_1)']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#06b6d4;">
+            <div class="section-label" style="color:#38bdf8;">🎬 TIKTOK / DOUYIN LAZY-LOAD PHÂN TRANG</div>
+            <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
+              <div>• API Cursor: <span style="font-family:var(--font-mono); color:#a5f3fc;">offset=36, count=12</span></div>
+              <div>• Cờ has_more: <span style="color:#34d399; font-weight:700;">true</span> (Còn dữ liệu)</div>
+              <div>• Đã quét: <span style="font-weight:700;">42 video</span> | Đạt chuẩn: <span style="font-weight:700; color:#38bdf8;">18 video</span></div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3); padding:8px; border-radius:6px; font-size:11px;">
+              <div style="color:#f43f5e; font-weight:600;">Phân loại định danh Tym:</div>
+              <div>• 18200tym_1 (18.2K Tym)</div>
+              <div>• 1500tym_1 (1.5K Tym)</div>
+              <div>• 310tym_1, 310tym_2 (310 Tym)</div>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="switchState('state-3-1')">Hoàn thành 100% ➔ Xem Kết Quả</button>
+        `
+      },
+
+      'state-2-4': {
+        title: 'Màn Hình 2.4: Trạng Thái Tạm Dừng (Paused State)',
+        desc: 'Người dùng click [Tạm dừng]. Bộ đếm thời gian và các request ngầm đóng băng, giữ nguyên dữ liệu RAM.',
+        tags: ['Screen 2', 'Paused', 'Freeze State'],
+        specs: [
+          ['Biến cờ', 'pipelineState.isPaused = true'],
+          ['Hành vi', 'Đóng băng các vòng lặp fetch ngầm, không gửi request mới']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#f59e0b; text-align:center; padding:24px 16px;">
+            <div style="font-size:36px; margin-bottom:8px;">⏸️</div>
+            <div style="font-size:15px; font-weight:700; color:#fbbf24;">TIẾN TRÌNH ĐÃ ĐƯỢC TẠM DỪNG</div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:4px;">Dữ liệu của các bước trước đó đã được lưu an toàn trong bộ nhớ RAM.</div>
+          </div>
+          <button class="btn-primary" style="background:#10b981;" onclick="switchState('state-2-1')">
+            <span>▶️ TIẾP TỤC CHẠY TIẾN TRÌNH</span>
+          </button>
+        `
+      },
+
+      'state-2-5': {
+        title: 'Màn Hình 2.5: Modal Xác Nhận Hủy Bỏ (Abort Modal)',
+        desc: 'Hộp thoại popup hỏi người dùng có chắc chắn muốn hủy bỏ tiến trình đang chạy.',
+        tags: ['Screen 2', 'Modal', 'Abort Confirm'],
+        specs: [
+          ['Modal Element', '#abortConfirmModal'],
+          ['Xác nhận Hủy', 'Giải phóng RAM, reset form, trở về Screen 1']
+        ],
+        render: () => `
+          <div class="modal-overlay">
+            <div class="modal-box">
+              <div class="modal-title" style="color:#f87171;">
+                <span>⚠️</span> XÁC NHẬN HỦY BỎ?
+              </div>
+              <div style="font-size:13px; color:#cbd5e1; line-height:1.5;">
+                Bạn có chắc chắn muốn dừng tác vụ? Dữ liệu đang thu thập dở dang sẽ bị hủy khỏi bộ nhớ.
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                <button class="state-btn" style="justify-content:center;" onclick="switchState('state-2-1')">Quay lại</button>
+                <button class="state-btn" style="background:#ef4444; color:white; justify-content:center;" onclick="switchState('state-1-1')">Xác nhận Hủy</button>
+              </div>
+            </div>
+          </div>
+        `
+      },
+
+      'state-3-1': {
+        title: 'Màn Hình 3.1: Dashboard Kết Quả & Xuất Dữ Liệu',
+        desc: 'Toàn bộ 10 bước hoàn thành 100%. Hiển thị thẻ chỉ số tổng quan và 2 nút hành động xuất dữ liệu.',
+        tags: ['Screen 3', 'Results', 'Dashboard', 'Export Zip', 'Quick Copy'],
+        specs: [
+          ['Zip Button', '#btnDownloadZip -> {SKU}.zip'],
+          ['Quick Copy Button', '#btnQuickCopySheet -> TSV 24 columns to clipboard'],
+          ['Dữ liệu sẵn sàng', '5 Shop 1688, 5 Shop Shopee, 18 Video, 10 Review 5★']
+        ],
+        render: () => `
+          <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; display:flex; align-items:center; gap:10px;">
+            <div style="font-size:24px;">🎉</div>
+            <div style="font-size:12px;">
+              <div style="font-weight:700; color:#34d399;">PIPELINE HOÀN TẤT THÀNH CÔNG!</div>
+              <div style="color:#94a3b8;">SKU: SHOEAIRMAX2026BLK • 01:14</div>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-title">1688.com</div>
+              <div class="metric-val">5 / 5 Shop</div>
+              <div class="metric-sub">¥39.00 - ¥45.00</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">Shopee PH</div>
+              <div class="metric-val">5 / 5 Shop</div>
+              <div class="metric-sub">₱389 - ₱429</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">TikTok Video</div>
+              <div class="metric-val">18 Video</div>
+              <div class="metric-sub">310 - 18.2K Tym</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">Shopee Review</div>
+              <div class="metric-val">10 Review 5★</div>
+              <div class="metric-sub">Có kèm ảnh/video</div>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="alert('Đang tạo và tải file SHOEAIRMAX2026BLK.zip!')">
+            <span>📦 TẢI GÓI ZIP: SHOEAIRMAX2026BLK.zip</span>
+          </button>
+
+          <button class="btn-primary" style="background:#059669;" onclick="switchState('state-3-5')">
+            <span>📋 SAO CHÉP BẢNG DỮ LIỆU (EXCEL/SHEETS)</span>
+          </button>
+
+          <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchState('state-3-2')">Video (18)</button>
+            <button class="tab-btn" onclick="switchState('state-3-3')">Reviews (10)</button>
+            <button class="tab-btn" onclick="switchState('state-3-4')">Specs & Giá</button>
+          </div>
+        `
+      },
+
+      'state-3-2': {
+        title: 'Màn Hình 3.2: Tab 1 – Danh Sách Video Links Theo Tym',
+        desc: 'Xem trước các video TikTok/Douyin được đặt tên chuẩn {tym}tym_{index}, kèm số lượng Tym/Comment/Share.',
+        tags: ['Screen 3', 'Tab 1', 'Video Links', 'Tym Format'],
+        specs: [
+          ['Lưu trữ', 'video_links.json'],
+          ['Định dạng tên', '310tym_1, 1500tym_1, 18200tym_1']
+        ],
+        render: () => `
+          <div class="tab-bar">
+            <button class="tab-btn active">Video (18)</button>
+            <button class="tab-btn" onclick="switchState('state-3-3')">Reviews (10)</button>
+            <button class="tab-btn" onclick="switchState('state-3-4')">Specs & Giá</button>
+          </div>
+
+          <div class="tab-content-area">
+            <div style="font-size:12px; display:flex; flex-direction:column; gap:8px;">
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;">
+                <div style="font-weight:700; color:#f43f5e;">🎬 18200tym_1</div>
+                <div style="font-size:11px; color:#94a3b8;">❤️ 18.2K Tym • 💬 412 Bình luận • ↗️ 890 Chia sẻ</div>
+                <div style="font-size:10px; color:#38bdf8; word-break:break-all; margin-top:2px;">https://www.tiktok.com/@creator1/video/734291...</div>
+              </div>
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;">
+                <div style="font-weight:700; color:#f43f5e;">🎬 1500tym_1</div>
+                <div style="font-size:11px; color:#94a3b8;">❤️ 1.5K Tym • 💬 89 Bình luận • ↗️ 45 Chia sẻ</div>
+                <div style="font-size:10px; color:#38bdf8; word-break:break-all; margin-top:2px;">https://www.tiktok.com/@creator2/video/733912...</div>
+              </div>
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;">
+                <div style="font-weight:700; color:#f43f5e;">🎬 310tym_1</div>
+                <div style="font-size:11px; color:#94a3b8;">❤️ 310 Tym • 💬 12 Bình luận • ↗️ 5 Chia sẻ</div>
+                <div style="font-size:10px; color:#38bdf8; word-break:break-all; margin-top:2px;">https://www.tiktok.com/@creator3/video/733801...</div>
+              </div>
+            </div>
+          </div>
+          <button class="btn-primary" style="background:#059669;" onclick="switchState('state-3-5')">📋 SAO CHÉP NHANH BẢNG DỮ LIỆU</button>
+        `
+      },
+
+      'state-3-3': {
+        title: 'Màn Hình 3.3: Tab 2 – 10 Đánh Giá 5 Sao Shopee Có Media',
+        desc: 'Xem 10 review 5★ có ảnh chụp thực tế và video review của khách hàng đã mua.',
+        tags: ['Screen 3', 'Tab 2', 'Shopee Reviews', '5 Star Media'],
+        specs: [
+          ['Lưu trữ', 'shopee_reviews.json'],
+          ['Điều kiện lọc', 'rating_star == 5 AND (images.length > 0 OR videos.length > 0)']
+        ],
+        render: () => `
+          <div class="tab-bar">
+            <button class="tab-btn" onclick="switchState('state-3-2')">Video (18)</button>
+            <button class="tab-btn active">Reviews (10)</button>
+            <button class="tab-btn" onclick="switchState('state-3-4')">Specs & Giá</button>
+          </div>
+
+          <div class="tab-content-area">
+            <div style="font-size:12px; display:flex; flex-direction:column; gap:8px;">
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;">
+                <div style="display:flex; justify-content:space-between; font-weight:600;">
+                  <span style="color:#fbbf24;">⭐⭐⭐⭐⭐ 5.0</span>
+                  <span style="color:#94a3b8; font-size:11px;">m***8</span>
+                </div>
+                <div style="margin-top:4px; font-size:11px;">"Giày đi siêu êm, form chuẩn, đế bám tốt đúng mô tả!"</div>
+                <div style="display:flex; gap:4px; margin-top:6px;">
+                  <span class="spec-tag">🖼️ Ảnh đế</span>
+                  <span class="spec-tag">🎥 Clip 12s</span>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;">
+                <div style="display:flex; justify-content:space-between; font-weight:600;">
+                  <span style="color:#fbbf24;">⭐⭐⭐⭐⭐ 5.0</span>
+                  <span style="color:#94a3b8; font-size:11px;">k***a</span>
+                </div>
+                <div style="margin-top:4px; font-size:11px;">"Very comfortable shoes for running and gym. 10/10!"</div>
+                <div style="display:flex; gap:4px; margin-top:6px;">
+                  <span class="spec-tag">🖼️ Ảnh unbox</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn-primary" style="background:#059669;" onclick="switchState('state-3-5')">📋 SAO CHÉP NHANH BẢNG DỮ LIỆU</button>
+        `
+      },
+
+      'state-3-4': {
+        title: 'Màn Hình 3.4: Tab 3 – Thông Số Gemini & Bảng Giá Đối Sánh',
+        desc: 'So sánh mức giá sỉ 1688 với giá bán lẻ Shopee, đi kèm các thuộc tính kỹ thuật do Gemini làm giàu.',
+        tags: ['Screen 3', 'Tab 3', 'Gemini Enrichment', 'Price Matrix'],
+        specs: [
+          ['Lưu trữ', 'enriched_product_data.json'],
+          ['Tỷ giá', 'Tự động tính quy đổi RMB -> VNĐ và PHP -> VNĐ']
+        ],
+        render: () => `
+          <div class="tab-bar">
+            <button class="tab-btn" onclick="switchState('state-3-2')">Video (18)</button>
+            <button class="tab-btn" onclick="switchState('state-3-3')">Reviews (10)</button>
+            <button class="tab-btn active">Specs & Giá</button>
+          </div>
+
+          <div class="tab-content-area">
+            <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
+              <div style="color:#38bdf8; font-weight:700;">ĐỐI SÁNH GIÁ:</div>
+              <div>• Giá nhập 1688 (RMB): <span style="color:#34d399; font-weight:700;">¥39.00 - ¥45.00</span> (~140k - 162k)</div>
+              <div>• Giá bán Shopee PH: <span style="color:#fbbf24; font-weight:700;">₱389 - ₱429</span> (~175k - 193k)</div>
+              <div style="border-top:1px solid var(--border-subtle); padding-top:6px; margin-top:4px; color:#818cf8; font-weight:700;">THUỘC TÍNH SẢN PHẨM:</div>
+              <div>• Tên: Sneaker Nam Nữ Thể Thao Thoáng Khí Mesh</div>
+              <div>• Chất liệu: Flyknit lưới, Đế EVA trợ lực</div>
+              <div>• Màu sắc: Đen, Trắng, Xám Bạc (Size 39-44)</div>
+            </div>
+          </div>
+          <button class="btn-primary" style="background:#059669;" onclick="switchState('state-3-5')">📋 SAO CHÉP NHANH BẢNG DỮ LIỆU</button>
+        `
+      },
+
+      'state-3-5': {
+        title: 'Màn Hình 3.5: Modal Xem Trước & Copy Bảng Tính 24 Cột',
+        desc: 'Modal hiển thị lưới dữ liệu định dạng TSV (Tab-Separated Values). Bấm nút để copy và paste thẳng vào Excel / Sheets.',
+        tags: ['Screen 3', 'Modal', 'TSV 24 Columns', 'Clipboard'],
+        specs: [
+          ['Format', 'Tab-Separated Values (TSV)'],
+          ['Số cột', '24 cột chuẩn e-commerce'],
+          ['Clipboard API', 'navigator.clipboard.writeText(tsvContent)']
+        ],
+        render: () => `
+          <div class="modal-overlay">
+            <div class="modal-box" style="max-width:380px;">
+              <div class="modal-title" style="color:#34d399;">
+                <span>📋</span> XEM TRƯỚC BẢNG DỮ LIỆU EXCEL
+              </div>
+              <div style="font-size:11px; color:#94a3b8;">
+                Định dạng chuẩn 24 cột (SKU, Tên, Giá 1688, Giá Shopee, 18 Links video, 10 Reviews...)
+              </div>
+              <div style="background:#090a0f; border:1px solid var(--border-subtle); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:10px; overflow-x:auto; white-space:nowrap; color:#a5f3fc;">
+                SKU\tPRODUCT_NAME\t1688_AVG_RMB\tSHOPEE_AVG_PHP\tVIDEO_1...<br>
+                SHOEAIRMAX2026BLK\tSneaker Nam Nu...\t42.00\t405.00\thttps://...
+              </div>
+              <button class="btn-primary" style="background:#059669;" onclick="alert('✅ ĐÃ SAO CHÉP 24 CỘT VÀO CLIPBOARD! Mở Excel và bấm Ctrl + V.')">
+                <span>📋 SAO CHÉP VÀO CLIPBOARD (CTRL+V VÀO EXCEL)</span>
+              </button>
+              <button class="state-btn" style="justify-content:center;" onclick="switchState('state-3-1')">Đóng modal</button>
+            </div>
+          </div>
+        `
+      },
+
+      'state-4-1': {
+        title: 'Màn Hình 4.1: Cảnh Báo Phát Hiện Captcha / Slider',
+        desc: '1688 hoặc Shopee chặn bot bằng thanh trượt. Pipeline tự động tạm dừng và hướng dẫn người dùng giải.',
+        tags: ['Screen 4', 'Exception', 'Captcha', 'Slider Verification'],
+        specs: [
+          ['Trigger', 'DOM xuất hiện #nc_1_n1z hoặc Shopee slider puzzle'],
+          ['Cơ chế', 'Pause pipeline, hiển thị nút mở tab sàn giải captcha, sau đó resume']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#ef4444; background:rgba(239,68,68,0.06);">
+            <div class="section-label" style="color:#f87171;">🛡️ PHÁT HIỆN YÊU CẦU XÁC THỰC BẢO MẬT (CAPTCHA)</div>
+            <div style="font-size:12px; color:#fecaca; line-height:1.5;">
+              Sàn 1688.com đang yêu cầu gạt thanh trượt chống bot để tiếp tục xem sản phẩm.
+            </div>
+            <div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; font-size:11px; color:#cbd5e1;">
+              1. Bấm nút bên dưới để mở tab 1688.<br>
+              2. Kéo thanh trượt sang phải để xác minh.<br>
+              3. Quay lại đây và bấm "Đã giải xong, Tiếp tục".
+            </div>
+            <button class="state-btn" style="background:#2563eb; color:white; justify-content:center;" onclick="alert('Đang mở tab 1688...')">🌐 Mở tab 1688 giải Captcha</button>
+          </div>
+          <button class="btn-primary" style="background:#10b981;" onclick="switchState('state-2-1')">🔄 ĐÃ GIẢI XONG, TIẾP TỤC CHẠY</button>
+        `
+      },
+
+      'state-4-2': {
+        title: 'Màn Hình 4.2: Lỗi Mất Kết Nối Mạng (Network Offline)',
+        desc: 'Mất mạng giữa chừng. Dữ liệu các bước trước không bị mất, hệ thống tự động thử kết nối lại.',
+        tags: ['Screen 4', 'Exception', 'Network Offline', 'Retry Loop'],
+        specs: [
+          ['Trigger', 'window.navigator.onLine == false hoặc Fetch NetworkError'],
+          ['Xử lý', 'Freeze RAM, retry every 5s']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#ef4444; text-align:center; padding:20px;">
+            <div style="font-size:32px;">📡</div>
+            <div style="font-size:14px; font-weight:700; color:#f87171; margin-top:6px;">MẤT KẾT NỐI INTERNET</div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:4px;">Dữ liệu các bước 1 -> 5 vẫn an toàn. Đang thử kết nối lại sau mỗi 5 giây...</div>
+          </div>
+          <button class="btn-primary" onclick="switchState('state-2-1')">🔄 THỬ KẾT NỐI LẠI NGAY</button>
+        `
+      },
+
+      'state-4-3': {
+        title: 'Màn Hình 4.3: Hàng Siêu Ngách (0 Đối Thủ Bán Sẵn)',
+        desc: 'Đã duyệt hết 100% từ khóa Shopee nhưng không có ai bán. Cơ hội thị trường xanh, vẫn xuất file 1688 & TikTok.',
+        tags: ['Screen 4', 'Exception', 'Zero Shopee Competitors', 'Blue Ocean'],
+        specs: [
+          ['Tình huống', 'Duyệt 100% 5 keyword nhưng shopee_shops.length == 0'],
+          ['Quyết định', 'Không báo lỗi, gợi ý cơ hội thị trường xanh, xuất file với 1688 & TikTok']
+        ],
+        render: () => `
+          <div class="section-box" style="border-color:#06b6d4; background:rgba(6,182,212,0.06);">
+            <div class="section-label" style="color:#38bdf8;">🌊 THỊ TRƯỜNG ĐẠI DƯƠNG XANH (0 ĐỐI THỦ)</div>
+            <div style="font-size:12px; color:#cffafe; line-height:1.5;">
+              Đã quét hết 100% từ khóa nhưng chưa có shop nào bán sản phẩm này trên Shopee.
+            </div>
+            <div style="font-size:11px; color:#cbd5e1; margin-top:4px;">
+              • 1688: Đã tìm thấy 5 xưởng gốc (¥39.00 - ¥45.00)<br>
+              • TikTok: Đã có 12 video nội dung liên quan
+            </div>
+          </div>
+          <button class="btn-primary" onclick="switchState('state-3-1')">📦 VẪN XUẤT FILE {SKU}.zip VỚI 1688 & TIKTOK</button>
+        `
+      }
+    };
+
+    // State Switcher Function
+    function switchState(stateKey) {
+      const state = STATES[stateKey];
+      if (!state) return;
+
+      // Update sidebar active buttons
+      document.querySelectorAll('.state-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(stateKey)) {
+          btn.classList.add('active');
+        }
+      });
+
+      // Update Stage Titles
+      document.getElementById('stageTitle').innerText = state.title;
+      document.getElementById('stageDesc').innerText = state.desc;
+
+      // Render Screen in Panel
+      document.getElementById('panelBody').innerHTML = state.render();
+
+      // Update Specs Inspector
+      document.getElementById('specTitle').innerText = state.title;
+      document.getElementById('specDesc').innerText = state.desc;
+
+      // Update Spec Tags
+      const tagsContainer = document.getElementById('specTags');
+      tagsContainer.innerHTML = state.tags.map(t => `<span class="spec-tag">${t}</span>`).join('');
+
+      // Update Spec Table
+      const tableBody = document.getElementById('specTableBody');
+      tableBody.innerHTML = state.specs.map(([k, v]) => `
+        <tr>
+          <td class="spec-key">${k}</td>
+          <td class="spec-val">${v}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Initialize Default State
+    window.addEventListener('DOMContentLoaded', () => {
+      switchState('state-1-1');
+    });
+  </script>
+</body>
+</html>
