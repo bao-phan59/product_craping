@@ -11,7 +11,72 @@
 import * as logger from '../logger.js';
 
 /**
+ * Trích xuất mảng JSON an toàn từ phản hồi của Gemini AI
+ * Xử lý được cả markdown codeblock, trailing comma, comment và cấu trúc bao bọc
+ * @param {string} rawText
+ * @returns {Array<Object>|null}
+ */
+export function safeExtractJsonArray(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  let clean = rawText.trim();
+  const mdMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (mdMatch) clean = mdMatch[1].trim();
+
+  // 1. Tìm mảng JSON [ ... ]
+  const firstBracket = clean.indexOf('[');
+  const lastBracket = clean.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    const jsonStr = clean.slice(firstBracket, lastBracket + 1);
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+
+    // Dọn dẹp dấu phẩy thừa (trailing commas) mà LLM thường mắc phải
+    try {
+      const sanitized = jsonStr
+        .replace(/,\s*([\]}])/g, '$1')
+        .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+      const parsed = JSON.parse(sanitized);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  // 2. Tìm object JSON { ... } có chứa mảng bên trong
+  const firstBrace = clean.indexOf('{');
+  const lastBrace = clean.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const jsonStr = clean.slice(firstBrace, lastBrace + 1);
+    try {
+      const sanitized = jsonStr
+        .replace(/,\s*([\]}])/g, '$1')
+        .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+      const parsed = JSON.parse(sanitized);
+      if (parsed && typeof parsed === 'object') {
+        const arr = Object.values(parsed).find(v => Array.isArray(v));
+        if (arr) return arr;
+      }
+    } catch {}
+  }
+
+  // 3. Phân tích từng dòng nếu Gemini liệt kê kết quả dạng text có cấu trúc
+  const lineMatches = clean.matchAll(/(?:video\s*#?(\d+)|index["'\s:]*(\d+))[\s\S]*?(isRelevant|isMatch|hợp lệ|khớp|đạt)["'\s:]*(true|false|đúng|sai|có|không)/gi);
+  const fallbackList = [];
+  for (const m of lineMatches) {
+    const idx = parseInt(m[1] || m[2], 10);
+    const val = m[4].toLowerCase();
+    const isRel = val === 'true' || val === 'đúng' || val === 'có';
+    fallbackList.push({ index: idx, isRelevant: isRel, isMatch: isRel, reason: isRel ? 'Gemini AI xác nhận khớp' : 'Gemini AI loại bỏ: Không liên quan' });
+  }
+  if (fallbackList.length > 0) return fallbackList;
+
+  return null;
+}
+
+/**
  * Gọi Gemini Vision với Batch hình ảnh và nhận JSON phản hồi an toàn
+ * Toàn bộ mọi đánh giá đều phải đi qua Gemini AI
  * @param {Object} gemini - GeminiExtensionSDK instance
  * @param {string} prompt
  * @param {Array<string>} images - [anchorImage, ...candidateImages]
@@ -22,45 +87,37 @@ async function callGeminiVisionBatch(gemini, prompt, images = [], model = '3.8-f
 
   try {
     let rawText = '';
-    // Hỗ trợ cả generateMultimodal và models.generateContent
-    if (typeof gemini.generateMultimodal === 'function') {
-      const res = await gemini.generateMultimodal(prompt, images, { model });
-      rawText = typeof res === 'string' ? res : (res?.text || '');
-    } else if (gemini.models && typeof gemini.models.generateContent === 'function') {
-      const res = await gemini.models.generateContent({ prompt, images, model });
-      rawText = typeof res === 'string' ? res : (res?.text || '');
-    } else if (typeof gemini.generateText === 'function') {
-      // Fallback text nếu SDK chỉ hỗ trợ text
-      const res = await gemini.generateText(prompt, { model });
-      rawText = typeof res === 'string' ? res : (res?.text || '');
+
+    // 1. Ưu tiên gọi Multimodal nếu có ảnh tham chiếu
+    if (images && images.length > 0 && typeof gemini.generateMultimodal === 'function') {
+      try {
+        const res = await gemini.generateMultimodal(prompt, images, { model });
+        rawText = typeof res === 'string' ? res : (res?.text || '');
+      } catch (mmErr) {
+        logger.warn('GEMINI_API', `Nạp ảnh Multimodal gặp lỗi: ${mmErr.message}. Tiếp tục gửi trực tiếp cho Gemini phân tích nội dung...`);
+      }
+    }
+
+    // 2. Nếu Multimodal chưa trả về kết quả (hoặc không có ảnh), dùng generateText với Gemini
+    if (!rawText) {
+      if (typeof gemini.generateText === 'function') {
+        const res = await gemini.generateText(prompt, { model });
+        rawText = typeof res === 'string' ? res : (res?.text || '');
+      } else if (gemini.models && typeof gemini.models.generateContent === 'function') {
+        const res = await gemini.models.generateContent({ prompt, model });
+        rawText = typeof res === 'string' ? res : (res?.text || '');
+      } else if (typeof gemini.chat === 'function') {
+        const res = await gemini.chat(prompt);
+        rawText = typeof res === 'string' ? res : (res?.text || '');
+      }
     }
 
     if (!rawText) return null;
 
-    // Trích xuất JSON an toàn từ khối phản hồi (loại bỏ markdown codeblock ```json ... ```)
-    let clean = rawText.trim();
-    const mdMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (mdMatch) clean = mdMatch[1].trim();
-
-    const firstBracket = clean.indexOf('[');
-    const lastBracket = clean.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket > firstBracket) {
-      try {
-        return JSON.parse(clean.slice(firstBracket, lastBracket + 1));
-      } catch {}
-    }
-
-    const firstBrace = clean.indexOf('{');
-    const lastBrace = clean.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      try {
-        return JSON.parse(clean.slice(firstBrace, lastBrace + 1));
-      } catch {}
-    }
-
-    return null;
+    // 3. Trích xuất mảng JSON an toàn từ câu trả lời của Gemini
+    return safeExtractJsonArray(rawText);
   } catch (err) {
-    logger.warn('GEMINI_VISION', `Gọi Vision thất bại (${err.message}). Tự động kích hoạt cơ chế lọc dự phòng.`);
+    logger.warn('GEMINI_API', `Lỗi giao tiếp Gemini AI: ${err.message}`);
     return null;
   }
 }
@@ -259,11 +316,12 @@ TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ chứa các index đạt chuẩn 
 }
 
 /**
- * 5. Xác thực Thị giác & Ngữ nghĩa Video TikTok/Douyin: Kiểm tra CẢ ẢNH BÌA VÀ TIÊU ĐỀ
+ * 5. Xác thực Video TikTok/Douyin qua Gemini AI: Bám sát [Ảnh 0] và Tiêu đề
+ * - Toàn bộ mọi video ứng viên đều được gửi trực tiếp cho Gemini AI thẩm định
  * - Bám sát tuyệt đối vào ảnh sản phẩm gốc [Ảnh 0] và tên sản phẩm mục tiêu
  * - Đưa toàn bộ tiêu đề, caption, kênh người tạo vào prompt để Gemini đối soát
  * - Loại bỏ triệt để các video không liên quan (piano, dance, nhạc, gái xinh, anime, v.v.)
- * - Tuyệt đối không bảo kê tất cả khi không khớp
+ * - Tuyệt đối không dùng bộ lọc ngữ nghĩa ngoài, không bảo kê tùy tiện
  * @param {Object} gemini
  * @param {string} anchorImage
  * @param {Array<Object>} candidateVideos - Mảng video [{ videoId, title, coverUrl, diggCount, authorName, platform }]
@@ -281,110 +339,97 @@ export async function verifyTikTokCovers(gemini, anchorImage, candidateVideos = 
     ? productContext.keywords.join(', ')
     : (productContext.keywords?.shopeeKeywords?.join(', ') || productContext.keywords?.douyinKeywords?.join(', ') || '');
 
-  const CHUNK_SIZE = 6; // Nhóm 6 video để prompt chi tiết và nạp ảnh ổn định hơn
+  // Gom nhóm 15 video để tối ưu lượt gọi API và giữ prompt gọn gàng
+  const BATCH_SIZE = 15;
   const verifiedAll = [];
+  const totalBatches = Math.ceil(validVids.length / BATCH_SIZE);
 
-  for (let cIdx = 0; cIdx < validVids.length; cIdx += CHUNK_SIZE) {
-    const chunk = validVids.slice(cIdx, cIdx + CHUNK_SIZE);
-    const coverImages = chunk.map(v => v.coverUrl).filter(Boolean);
+  for (let bIdx = 0; bIdx < validVids.length; bIdx += BATCH_SIZE) {
+    const chunk = validVids.slice(bIdx, bIdx + BATCH_SIZE);
+    const batchNum = Math.floor(bIdx / BATCH_SIZE) + 1;
 
-    // Xây dựng danh sách chi tiết từng video ứng viên kèm TIÊU ĐỀ
+    // Xây dựng danh sách chi tiết từng video ứng viên kèm TIÊU ĐỀ và NỀN TẢNG
     const candidateListPrompt = chunk.map((v, i) => `[Video #${i + 1}]:
 - Tiêu đề / Caption: "${v.title || 'Không có tiêu đề'}"
-- Kênh người tạo: @${v.authorName || 'creator'} (${v.platform || 'video'})
-- Ảnh bìa: [Ảnh ${i + 1}]`).join('\n\n');
+- Kênh người tạo: @${v.authorName || 'creator'} (${v.platform || 'video'})`).join('\n\n');
 
     const prompt = `
-SYSTEM: Bạn là Chuyên gia Giám định Thị giác & Nội dung Video E-Commerce Cực Kỳ Khắt Khe (Strict Video Auditor).
+SYSTEM: Bạn là Chuyên gia Trí Tuệ Nhân Tạo Giám Định Video Sản Phẩm E-Commerce (Gemini AI Video Auditor).
 THÔNG TIN SẢN PHẨM MỤC TIÊU:
 - Tên sản phẩm: "${targetName}"
-${targetCategory ? `- Danh mục / Kiểu loại: "${targetCategory}"` : ''}
-${searchKeywords ? `- Từ khóa liên quan: "${searchKeywords}"` : ''}
-- [Ảnh 0]: Ảnh sản phẩm mục tiêu tham chiếu (Anchor Reference Image).
+${targetCategory ? `- Danh mục / Kiểu dáng: "${targetCategory}"` : ''}
+${searchKeywords ? `- Từ khóa sản phẩm: "${searchKeywords}"` : ''}
+- [Ảnh 0]: Ảnh sản phẩm mục tiêu tham chiếu (Anchor Reference Image). Hãy quan sát kỹ hình dáng, mẫu mã, công năng của sản phẩm trong [Ảnh 0].
 
-DANH SÁCH ${chunk.length} VIDEO ỨNG VIÊN CẦN THẨM ĐỊNH (KÈM TIÊU ĐỀ VÀ ẢNH BÌA):
+DANH SÁCH ${chunk.length} VIDEO ỨNG VIÊN CẦN GEMINI THẨM ĐỊNH (NHÓM ${batchNum}/${totalBatches}):
 ${candidateListPrompt}
 
-NGUYÊN TẮC GIÁM ĐỊNH BẮT BUỘC:
+NGUYÊN TẮC GIÁM ĐỊNH BẮT BUỘC CỦA GEMINI AI:
 1. BÁM SÁT TUYỆT ĐỐI VÀO SẢN PHẨM TRONG [Ảnh 0] VÀ TÊN "${targetName}".
 2. CHỈ ĐÁNH DẤU "isRelevant": true NẾU:
-   - Ảnh bìa hoặc tiêu đề video THỰC SỰ quay/nói về đúng sản phẩm mục tiêu này (ví dụ: đúng loại bóng đèn, đúng mẫu giày, đúng món đồ trong Ảnh 0).
+   - Video thực sự quay, giới thiệu, đập hộp, hướng dẫn sử dụng hoặc review đúng sản phẩm mục tiêu trong [Ảnh 0].
 3. BẮT BUỘC ĐÁNH DẤU "isRelevant": false NẾU:
-   - Video chỉ có mặt người nói chuyện/nhảy múa (dance, cosplay, gái xinh, trai đẹp) mà không có sản phẩm mục tiêu.
-   - Video về âm nhạc, đàn piano, ca hát, phong cảnh, thú cưng, đồ ăn, phim ảnh.
-   - Video về sản phẩm KHÁC LOẠI (ví dụ: quần áo, đàn, đồ chơi khi sản phẩm là bóng đèn).
-   - Tiêu đề video chứa các từ khóa không liên quan (như #dance, #piano, #vlog, #music, #tamsu, #review đồ khác).
+   - Video thuộc nội dung giải trí, nhảy múa (dance, vũ đạo), ca hát, đàn piano, vlog đời sống, biến hình gái xinh/trai đẹp, hài hước, anime, gaming.
+   - Video về sản phẩm KHÁC LOẠI (ví dụ: quần áo, giày dép, đàn nhạc, đồ chơi khi sản phẩm là bóng đèn).
+   - Video không liên quan đến sản phẩm mục tiêu.
 4. KHI NGHI NGỜ HOẶC KHÔNG THẤY SẢN PHẨM: Đánh dấu isRelevant: false. Tuyệt đối không duyệt bừa bãi.
 
-TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (không kèm markdown):
+TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (không kèm văn bản giải thích ngoài JSON):
 [
-  { "index": 1, "isRelevant": true, "reason": "Ảnh bìa và tiêu đề khớp đúng sản phẩm mục tiêu" },
-  { "index": 2, "isRelevant": false, "reason": "Video đàn piano, hoàn toàn không liên quan đến sản phẩm" }
+  { "index": 1, "isRelevant": true, "reason": "Video review đúng mẫu sản phẩm trong Ảnh 0" },
+  { "index": 2, "isRelevant": false, "reason": "Video ca hát / đàn piano không liên quan" }
 ]
 `.trim();
 
-    const chunkNum = Math.floor(cIdx / CHUNK_SIZE) + 1;
-    const totalChunks = Math.ceil(validVids.length / CHUNK_SIZE);
-    logger.info('VISION_TIKTOK', `Đang gửi ${chunk.length} video (nhóm ${chunkNum}/${totalChunks}) kèm tiêu đề & ảnh bìa cho Gemini Vision thẩm định...`);
+    logger.info('VISION_TIKTOK', `Đang gửi ${chunk.length} video (Nhóm ${batchNum}/${totalBatches}) cho Gemini AI thẩm định bám sát ảnh gốc & tiêu đề...`);
 
     try {
-      const res = await callGeminiVisionBatch(gemini, prompt, [anchorImage, ...coverImages]);
+      // Gửi anchorImage kèm prompt cho Gemini Vision
+      const res = await callGeminiVisionBatch(gemini, prompt, anchorImage ? [anchorImage] : []);
+
       if (Array.isArray(res) && res.length > 0) {
         const matchIndices = new Set();
         res.forEach(r => {
           const idx = Number(r.index) - 1;
-          const isMatch = r.isRelevant === true || r.isRelevant === 'true';
+          const isMatch = r.isRelevant === true || r.isRelevant === 'true' || r.isMatch === true || r.isMatch === 'true' || r.isValid === true || r.isValid === 'true';
           if (idx >= 0 && idx < chunk.length) {
             chunk[idx].isMatch = isMatch;
-            chunk[idx].visionReason = r.reason || (isMatch ? 'Khớp sản phẩm gốc' : 'Không liên quan');
+            chunk[idx].visionReason = r.reason || (isMatch ? 'Gemini AI duyệt: Khớp sản phẩm gốc' : 'Gemini AI loại bỏ: Không liên quan');
             if (isMatch) {
               matchIndices.add(idx);
               logger.info('VISION_TIKTOK', `  ✓ Video [${chunk[idx].platform}] "${(chunk[idx].title || '').slice(0, 35)}...": Gemini duyệt [${chunk[idx].visionReason}]`);
             } else {
-              logger.info('VISION_TIKTOK', `  ✗ Video [${chunk[idx].platform}] "${(chunk[idx].title || '').slice(0, 35)}...": Loại bỏ [${chunk[idx].visionReason}]`);
+              logger.info('VISION_TIKTOK', `  ✗ Video [${chunk[idx].platform}] "${(chunk[idx].title || '').slice(0, 35)}...": Gemini loại bỏ [${chunk[idx].visionReason}]`);
             }
           }
         });
+
         const verifiedChunk = chunk.filter((_, idx) => matchIndices.has(idx));
         verifiedAll.push(...verifiedChunk);
       } else {
-        // NẾU GEMINI AI KHÔNG PHẢN HỒI HOẶC LỖI TOKEN:
-        // DÙNG BỘ LỌC NGỮ NGHĨA TIÊU ĐỀ KHẮT KHE - TUYỆT ĐỐI KHÔNG BẢO KÊ TẤT CẢ!
-        logger.warn('VISION_TIKTOK', `Nhóm ${chunkNum}: Gemini không phản hồi JSON. Kích hoạt bộ lọc tiêu đề ngữ nghĩa khắt khe...`);
-        const stopWords = new Set(['the', 'and', 'for', 'with', 'của', 'cho', 'và', 'sản', 'phẩm', 'review', 'test', 'video']);
-        const targetWords = (targetName + ' ' + searchKeywords)
-          .toLowerCase()
-          .replace(/[^\w\s\u4e00-\u9fa5]/gi, ' ')
-          .split(/\s+/)
-          .filter(w => w.length >= 3 && !stopWords.has(w));
-
+        // Nếu Gemini không phản hồi JSON cho nhóm này, đánh dấu rõ ràng là chưa duyệt
+        // Tuyệt đối không dùng bộ lọc ngữ nghĩa ngoài, không bảo kê tùy tiện
+        logger.warn('VISION_TIKTOK', `Nhóm ${batchNum}: Gemini chưa phản hồi kết quả hợp lệ. Toàn bộ video nhóm này không được phê duyệt.`);
         chunk.forEach(v => {
-          const tLower = (v.title || '').toLowerCase();
-          const isJunk = /piano|dance|nhảy|vlog|xuhuong|hát|music|đàn|makeup|hài|anime|game|lol|skin|phim|vũ đạo|cover song/.test(tLower);
-          const matchedKw = targetWords.find(kw => tLower.includes(kw));
-
-          if (matchedKw && !isJunk) {
-            v.isMatch = true;
-            v.visionReason = `Tiêu đề khớp từ khóa "${matchedKw}"`;
-            verifiedAll.push(v);
-            logger.info('VISION_TIKTOK', `  ✓ Video "${(v.title || '').slice(0, 35)}...": Khớp tiêu đề [${matchedKw}]`);
-          } else {
-            v.isMatch = false;
-            v.visionReason = isJunk ? 'Tiêu đề giải trí/nhảy múa/piano không liên quan' : 'Tiêu đề không chứa từ khóa sản phẩm';
-            logger.info('VISION_TIKTOK', `  ✗ Video "${(v.title || '').slice(0, 35)}...": Loại bỏ [${v.visionReason}]`);
-          }
+          v.isMatch = false;
+          v.visionReason = 'Gemini AI chưa phê duyệt';
         });
       }
     } catch (chunkErr) {
-      logger.warn('VISION_TIKTOK', `Lỗi batch ${chunkNum}: ${chunkErr.message}. Không duyệt tùy tiện.`);
+      logger.warn('VISION_TIKTOK', `Nhóm ${batchNum}: Lỗi thẩm định Gemini (${chunkErr.message}). Không duyệt tùy tiện.`);
       chunk.forEach(v => {
         v.isMatch = false;
         v.visionReason = `Lỗi kiểm định (${chunkErr.message})`;
       });
     }
+
+    // Nghỉ nhẹ 600ms giữa các nhóm để tránh nghẽn luồng và hạn chế rate limit Google Gemini Web
+    if (bIdx + BATCH_SIZE < validVids.length) {
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
   }
 
-  logger.success('VISION_TIKTOK', `Gemini Vision hoàn tất phân tích: ${verifiedAll.length}/${validVids.length} video quay đúng sản phẩm mục tiêu.`);
+  logger.success('VISION_TIKTOK', `Gemini AI hoàn tất thẩm định: ${verifiedAll.length}/${validVids.length} video quay đúng sản phẩm mục tiêu.`);
   return verifiedAll;
 }
 
