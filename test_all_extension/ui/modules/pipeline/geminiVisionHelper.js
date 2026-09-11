@@ -259,44 +259,73 @@ TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ chứa các index đạt chuẩn 
 }
 
 /**
- * 5. Xác thực Thị giác Video TikTok/Douyin: Kiểm tra ảnh cover thumbnail có quay đúng sản phẩm
+ * 5. Xác thực Thị giác & Ngữ nghĩa Video TikTok/Douyin: Kiểm tra CẢ ẢNH BÌA VÀ TIÊU ĐỀ
+ * - Bám sát tuyệt đối vào ảnh sản phẩm gốc [Ảnh 0] và tên sản phẩm mục tiêu
+ * - Đưa toàn bộ tiêu đề, caption, kênh người tạo vào prompt để Gemini đối soát
+ * - Loại bỏ triệt để các video không liên quan (piano, dance, nhạc, gái xinh, anime, v.v.)
+ * - Tuyệt đối không bảo kê tất cả khi không khớp
  * @param {Object} gemini
  * @param {string} anchorImage
  * @param {Array<Object>} candidateVideos - Mảng video [{ videoId, title, coverUrl, diggCount, authorName, platform }]
- * @returns {Promise<Array<Object>>}
+ * @param {Object} [productContext] - { productTitle, sku, keywords, category }
+ * @returns {Promise<Array<Object>>} Danh sách video thực sự quay đúng sản phẩm mục tiêu
  */
-export async function verifyTikTokCovers(gemini, anchorImage, candidateVideos = []) {
+export async function verifyTikTokCovers(gemini, anchorImage, candidateVideos = [], productContext = {}) {
   if (!candidateVideos || candidateVideos.length === 0) return [];
-  const validVids = candidateVideos.filter(v => v.coverUrl);
-  if (validVids.length === 0) return candidateVideos;
+  const validVids = candidateVideos.filter(v => v.coverUrl || v.title);
+  if (validVids.length === 0) return [];
 
-  const CHUNK_SIZE = 8;
+  const targetName = productContext.productTitle || productContext.sku || 'Sản phẩm mục tiêu';
+  const targetCategory = productContext.category || '';
+  const searchKeywords = Array.isArray(productContext.keywords)
+    ? productContext.keywords.join(', ')
+    : (productContext.keywords?.shopeeKeywords?.join(', ') || productContext.keywords?.douyinKeywords?.join(', ') || '');
+
+  const CHUNK_SIZE = 6; // Nhóm 6 video để prompt chi tiết và nạp ảnh ổn định hơn
   const verifiedAll = [];
 
   for (let cIdx = 0; cIdx < validVids.length; cIdx += CHUNK_SIZE) {
     const chunk = validVids.slice(cIdx, cIdx + CHUNK_SIZE);
-    const coverImages = chunk.map(v => v.coverUrl);
+    const coverImages = chunk.map(v => v.coverUrl).filter(Boolean);
+
+    // Xây dựng danh sách chi tiết từng video ứng viên kèm TIÊU ĐỀ
+    const candidateListPrompt = chunk.map((v, i) => `[Video #${i + 1}]:
+- Tiêu đề / Caption: "${v.title || 'Không có tiêu đề'}"
+- Kênh người tạo: @${v.authorName || 'creator'} (${v.platform || 'video'})
+- Ảnh bìa: [Ảnh ${i + 1}]`).join('\n\n');
 
     const prompt = `
-SYSTEM: Bạn là Chuyên gia Giám định & Phân tích Thị giác Video Sản phẩm (TikTok & Douyin Video Auditor).
-[Ảnh 0]: Ảnh sản phẩm mục tiêu tham chiếu (Anchor Reference Image).
-[Ảnh 1 đến ${coverImages.length}]: Ảnh bìa (Cover Thumbnail) cào được từ các video TikTok/Douyin.
+SYSTEM: Bạn là Chuyên gia Giám định Thị giác & Nội dung Video E-Commerce Cực Kỳ Khắt Khe (Strict Video Auditor).
+THÔNG TIN SẢN PHẨM MỤC TIÊU:
+- Tên sản phẩm: "${targetName}"
+${targetCategory ? `- Danh mục / Kiểu loại: "${targetCategory}"` : ''}
+${searchKeywords ? `- Từ khóa liên quan: "${searchKeywords}"` : ''}
+- [Ảnh 0]: Ảnh sản phẩm mục tiêu tham chiếu (Anchor Reference Image).
 
-NHIỆM VỤ CỐT LÕI:
-1. Đối chiếu trực quan từng ảnh bìa video với [Ảnh 0].
-2. Xác định xem ảnh bìa video có thực sự xuất hiện hoặc quay sản phẩm mục tiêu [Ảnh 0] hay không.
-3. LOẠI BỎ các video chỉ câu view bằng mặt người nhảy múa/nói chuyện, hình nền phong cảnh, hoặc quay sản phẩm khác không liên quan.
+DANH SÁCH ${chunk.length} VIDEO ỨNG VIÊN CẦN THẨM ĐỊNH (KÈM TIÊU ĐỀ VÀ ẢNH BÌA):
+${candidateListPrompt}
 
-TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (không kèm giải thích markdown):
+NGUYÊN TẮC GIÁM ĐỊNH BẮT BUỘC:
+1. BÁM SÁT TUYỆT ĐỐI VÀO SẢN PHẨM TRONG [Ảnh 0] VÀ TÊN "${targetName}".
+2. CHỈ ĐÁNH DẤU "isRelevant": true NẾU:
+   - Ảnh bìa hoặc tiêu đề video THỰC SỰ quay/nói về đúng sản phẩm mục tiêu này (ví dụ: đúng loại bóng đèn, đúng mẫu giày, đúng món đồ trong Ảnh 0).
+3. BẮT BUỘC ĐÁNH DẤU "isRelevant": false NẾU:
+   - Video chỉ có mặt người nói chuyện/nhảy múa (dance, cosplay, gái xinh, trai đẹp) mà không có sản phẩm mục tiêu.
+   - Video về âm nhạc, đàn piano, ca hát, phong cảnh, thú cưng, đồ ăn, phim ảnh.
+   - Video về sản phẩm KHÁC LOẠI (ví dụ: quần áo, đàn, đồ chơi khi sản phẩm là bóng đèn).
+   - Tiêu đề video chứa các từ khóa không liên quan (như #dance, #piano, #vlog, #music, #tamsu, #review đồ khác).
+4. KHI NGHI NGỜ HOẶC KHÔNG THẤY SẢN PHẨM: Đánh dấu isRelevant: false. Tuyệt đối không duyệt bừa bãi.
+
+TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (không kèm markdown):
 [
-  { "index": 1, "isRelevant": true, "reason": "Xuất hiện đúng sản phẩm mục tiêu" },
-  { "index": 2, "isRelevant": false, "reason": "Không thấy sản phẩm / Chỉ có mặt người" }
+  { "index": 1, "isRelevant": true, "reason": "Ảnh bìa và tiêu đề khớp đúng sản phẩm mục tiêu" },
+  { "index": 2, "isRelevant": false, "reason": "Video đàn piano, hoàn toàn không liên quan đến sản phẩm" }
 ]
 `.trim();
 
     const chunkNum = Math.floor(cIdx / CHUNK_SIZE) + 1;
     const totalChunks = Math.ceil(validVids.length / CHUNK_SIZE);
-    logger.info('VISION_TIKTOK', `Đang gửi ${coverImages.length} thumbnail video (nhóm ${chunkNum}/${totalChunks}) cho Gemini Vision phân tích trực quan...`);
+    logger.info('VISION_TIKTOK', `Đang gửi ${chunk.length} video (nhóm ${chunkNum}/${totalChunks}) kèm tiêu đề & ảnh bìa cho Gemini Vision thẩm định...`);
 
     try {
       const res = await callGeminiVisionBatch(gemini, prompt, [anchorImage, ...coverImages]);
@@ -306,27 +335,57 @@ TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (không kèm giải thích markdo
           const idx = Number(r.index) - 1;
           const isMatch = r.isRelevant === true || r.isRelevant === 'true';
           if (idx >= 0 && idx < chunk.length) {
+            chunk[idx].isMatch = isMatch;
             chunk[idx].visionReason = r.reason || (isMatch ? 'Khớp sản phẩm gốc' : 'Không liên quan');
             if (isMatch) {
               matchIndices.add(idx);
-              logger.info('VISION_TIKTOK', `  ✓ Video [${chunk[idx].platform || 'video'}] (@${chunk[idx].authorName || 'creator'}): Gemini Vision xác nhận [${chunk[idx].visionReason}]`);
+              logger.info('VISION_TIKTOK', `  ✓ Video [${chunk[idx].platform}] "${(chunk[idx].title || '').slice(0, 35)}...": Gemini duyệt [${chunk[idx].visionReason}]`);
             } else {
-              logger.info('VISION_TIKTOK', `  ✗ Video [${chunk[idx].platform || 'video'}] (@${chunk[idx].authorName || 'creator'}): Loại bỏ [${chunk[idx].visionReason}]`);
+              logger.info('VISION_TIKTOK', `  ✗ Video [${chunk[idx].platform}] "${(chunk[idx].title || '').slice(0, 35)}...": Loại bỏ [${chunk[idx].visionReason}]`);
             }
           }
         });
         const verifiedChunk = chunk.filter((_, idx) => matchIndices.has(idx));
         verifiedAll.push(...verifiedChunk);
       } else {
-        verifiedAll.push(...chunk);
+        // NẾU GEMINI AI KHÔNG PHẢN HỒI HOẶC LỖI TOKEN:
+        // DÙNG BỘ LỌC NGỮ NGHĨA TIÊU ĐỀ KHẮT KHE - TUYỆT ĐỐI KHÔNG BẢO KÊ TẤT CẢ!
+        logger.warn('VISION_TIKTOK', `Nhóm ${chunkNum}: Gemini không phản hồi JSON. Kích hoạt bộ lọc tiêu đề ngữ nghĩa khắt khe...`);
+        const stopWords = new Set(['the', 'and', 'for', 'with', 'của', 'cho', 'và', 'sản', 'phẩm', 'review', 'test', 'video']);
+        const targetWords = (targetName + ' ' + searchKeywords)
+          .toLowerCase()
+          .replace(/[^\w\s\u4e00-\u9fa5]/gi, ' ')
+          .split(/\s+/)
+          .filter(w => w.length >= 3 && !stopWords.has(w));
+
+        chunk.forEach(v => {
+          const tLower = (v.title || '').toLowerCase();
+          const isJunk = /piano|dance|nhảy|vlog|xuhuong|hát|music|đàn|makeup|hài|anime|game|lol|skin|phim|vũ đạo|cover song/.test(tLower);
+          const matchedKw = targetWords.find(kw => tLower.includes(kw));
+
+          if (matchedKw && !isJunk) {
+            v.isMatch = true;
+            v.visionReason = `Tiêu đề khớp từ khóa "${matchedKw}"`;
+            verifiedAll.push(v);
+            logger.info('VISION_TIKTOK', `  ✓ Video "${(v.title || '').slice(0, 35)}...": Khớp tiêu đề [${matchedKw}]`);
+          } else {
+            v.isMatch = false;
+            v.visionReason = isJunk ? 'Tiêu đề giải trí/nhảy múa/piano không liên quan' : 'Tiêu đề không chứa từ khóa sản phẩm';
+            logger.info('VISION_TIKTOK', `  ✗ Video "${(v.title || '').slice(0, 35)}...": Loại bỏ [${v.visionReason}]`);
+          }
+        });
       }
     } catch (chunkErr) {
-      logger.warn('VISION_TIKTOK', `Lỗi batch ${chunkNum} Vision video: ${chunkErr.message}. Tiếp nhận các video của nhóm này.`);
-      verifiedAll.push(...chunk);
+      logger.warn('VISION_TIKTOK', `Lỗi batch ${chunkNum}: ${chunkErr.message}. Không duyệt tùy tiện.`);
+      chunk.forEach(v => {
+        v.isMatch = false;
+        v.visionReason = `Lỗi kiểm định (${chunkErr.message})`;
+      });
     }
   }
 
   logger.success('VISION_TIKTOK', `Gemini Vision hoàn tất phân tích: ${verifiedAll.length}/${validVids.length} video quay đúng sản phẩm mục tiêu.`);
-  return verifiedAll.length > 0 ? verifiedAll : validVids;
+  return verifiedAll;
 }
+
 

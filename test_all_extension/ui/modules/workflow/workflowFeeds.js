@@ -355,10 +355,10 @@ function renderFeedTikTokVideos(state) {
 
   if (feedTiktokContent && (rawVideos.length > 0 || verifiedVideos.length > 0)) {
     const isRawMode = feedUiState.tiktokViewMode === 'raw';
-    const displayList = isRawMode ? (rawVideos.length > 0 ? rawVideos : verifiedVideos) : (verifiedVideos.length > 0 ? verifiedVideos : rawVideos);
+    const displayList = isRawMode ? rawVideos : verifiedVideos;
 
     if (feedTiktokPill) {
-      feedTiktokPill.textContent = `${verifiedVideos.length}/${rawVideos.length || verifiedVideos.length} Video`;
+      feedTiktokPill.textContent = `${verifiedVideos.length}/${rawVideos.length} Video`;
     }
     if (feedTiktokSub) {
       feedTiktokSub.textContent = `Đã cào ${rawVideos.length} video thô ban đầu | Gemini Vision đã thẩm định ${verifiedVideos.length} video quay đúng sản phẩm`;
@@ -367,7 +367,7 @@ function renderFeedTikTokVideos(state) {
     const toggleHtml = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size: 11px; font-weight: bold; color: #e2e8f0;">
-          ${isRawMode ? `📦 Toàn Bộ Video Thô Chưa Lọc (${displayList.length})` : `🎯 Video Đã Được Gemini Vision Thẩm Định Bìa (${displayList.length})`}
+          ${isRawMode ? `📦 Toàn Bộ Video Thô Chưa Lọc (${rawVideos.length})` : `🎯 Video Đã Được Gemini Vision Thẩm Định Bìa (${verifiedVideos.length})`}
         </div>
         <div class="wf-feed-toggle-group">
           <button class="wf-feed-toggle-btn ${!isRawMode ? 'active' : ''}" data-type="tiktok" data-mode="verified">🎯 Gemini Chọn (${verifiedVideos.length})</button>
@@ -376,40 +376,56 @@ function renderFeedTikTokVideos(state) {
       </div>
     `;
 
-    feedTiktokContent.innerHTML = toggleHtml + `
-      <div class="wf-tiktok-videos-grid">
-        ${displayList.map((v, idx) => {
-          const rawLikes = Number(v.diggCount || v.likeCount || 0);
-          const likeBadge = rawLikes >= 1000000 
-            ? `${(rawLikes / 1000000).toFixed(1).replace(/\.0$/, '')}M` 
-            : (rawLikes >= 1000 ? `${(rawLikes / 1000).toFixed(1).replace(/\.0$/, '')}K` : String(rawLikes));
-          const titleSafe = escapeHtml(v.title || v.description || 'Video Review');
-          const authorSafe = escapeHtml(v.authorName || (v.author?.nickname || 'creator'));
-          const isDouyin = v.platform === 'Douyin' || v.platform === 'douyin' || (v.videoUrl && v.videoUrl.includes('douyin.com'));
-          const platformLabel = isDouyin ? 'Douyin' : 'TikTok';
-          const cardUrl = v.videoUrl ? encodeURI(v.videoUrl) : '#';
-          const isVerified = verifiedVideos.some(ver => String(ver.videoId) === String(v.videoId));
-          const reasonText = v.visionReason ? escapeHtml(v.visionReason) : (isVerified ? 'Khớp sản phẩm gốc' : 'Video thô');
+    let contentGridHtml = '';
+    if (!isRawMode && verifiedVideos.length === 0) {
+      contentGridHtml = `
+        <div style="color: #94a3b8; font-size: 11px; padding: 16px; text-align: center; background: rgba(2,6,23,0.5); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
+          Chưa có video nào khớp với sản phẩm mục tiêu (Gemini đã loại bỏ các video nhảy múa/piano/không liên quan).<br/>
+          Bấm tab <strong>[📦 Video Thô (${rawVideos.length})]</strong> ở trên để xem chi tiết lý do loại bỏ từng video.
+        </div>
+      `;
+    } else {
+      contentGridHtml = `
+        <div class="wf-tiktok-videos-grid">
+          ${displayList.map((v, idx) => {
+            const rawLikes = Number(v.diggCount || v.likeCount || 0);
+            const likeBadge = rawLikes >= 1000000 
+              ? `${(rawLikes / 1000000).toFixed(1).replace(/\.0$/, '')}M` 
+              : (rawLikes >= 1000 ? `${(rawLikes / 1000).toFixed(1).replace(/\.0$/, '')}K` : String(rawLikes));
+            const titleSafe = escapeHtml(v.title || v.description || 'Video Review');
+            const authorSafe = escapeHtml(v.authorName || (v.author?.nickname || 'creator'));
+            const isDouyin = v.platform === 'Douyin' || v.platform === 'douyin' || (v.videoUrl && v.videoUrl.includes('douyin.com'));
+            const platformLabel = isDouyin ? 'Douyin' : 'TikTok';
+            const cardUrl = v.videoUrl ? encodeURI(v.videoUrl) : '#';
+            const isVerified = verifiedVideos.some(ver => String(ver.videoId) === String(v.videoId));
+            const reasonText = v.visionReason ? escapeHtml(v.visionReason) : (isVerified ? 'Khớp sản phẩm gốc' : 'Video thô');
 
-          return `
-          <div class="wf-tiktok-vid-card" title="${titleSafe}" onclick="window.open('${cardUrl}', '_blank')">
-            <div class="wf-tiktok-vid-thumb-wrap">
-              <img src="${v.coverUrl || DEFAULT_IMAGE_SVG}" class="wf-tiktok-vid-thumb" onerror="this.src='${DEFAULT_IMAGE_SVG}'" loading="lazy" />
-              <span class="wf-tiktok-platform-badge" style="background:${isDouyin ? '#fe2c55' : '#25f4ee'}; color:#000;">${platformLabel}</span>
-              <span class="wf-tiktok-tym-badge">❤️ ${likeBadge}</span>
-              ${isVerified ? '<span style="position:absolute; top:4px; right:4px; background:rgba(16,185,129,0.85); color:#fff; font-size:8px; padding:1px 4px; border-radius:3px; font-weight:bold;">✓ Gemini</span>' : ''}
-            </div>
-            <div class="wf-tiktok-vid-info">
-              <div class="wf-tiktok-vid-title">#${idx + 1}. ${titleSafe}</div>
-              <div class="wf-tiktok-vid-author" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>@${authorSafe}</span>
-                <span style="font-size:8px; color:${isVerified ? '#34d399' : '#94a3b8'}; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${reasonText}</span>
+            const statusBadge = isVerified
+              ? '<span style="position:absolute; top:4px; right:4px; background:rgba(16,185,129,0.85); color:#fff; font-size:8px; padding:1px 4px; border-radius:3px; font-weight:bold;">✓ Gemini</span>'
+              : (isRawMode ? '<span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; font-size:8px; padding:1px 4px; border-radius:3px; font-weight:bold;">✗ Lệch SP</span>' : '');
+
+            return `
+            <div class="wf-tiktok-vid-card" title="${titleSafe}" onclick="window.open('${cardUrl}', '_blank')">
+              <div class="wf-tiktok-vid-thumb-wrap">
+                <img src="${v.coverUrl || DEFAULT_IMAGE_SVG}" class="wf-tiktok-vid-thumb" onerror="this.src='${DEFAULT_IMAGE_SVG}'" loading="lazy" />
+                <span class="wf-tiktok-platform-badge" style="background:${isDouyin ? '#fe2c55' : '#25f4ee'}; color:#000;">${platformLabel}</span>
+                <span class="wf-tiktok-tym-badge">❤️ ${likeBadge}</span>
+                ${statusBadge}
+              </div>
+              <div class="wf-tiktok-vid-info">
+                <div class="wf-tiktok-vid-title">#${idx + 1}. ${titleSafe}</div>
+                <div class="wf-tiktok-vid-author" style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>@${authorSafe}</span>
+                  <span style="font-size:8px; color:${isVerified ? '#34d399' : '#f87171'}; max-width:95px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${reasonText}">${reasonText}</span>
+                </div>
               </div>
             </div>
-          </div>
-        `;
-        }).join('')}
-      </div>
-    `;
+          `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    feedTiktokContent.innerHTML = toggleHtml + contentGridHtml;
   }
 }

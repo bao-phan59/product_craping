@@ -766,14 +766,20 @@ export async function runStep7_TikTokVideos(tiktok, gemini, originalImage, keywo
   pipelineState.rawTikTokVideos = [...harvestedVideos];
   updateProgress(7, 83, 'Thu hoạch Video Douyin & TikTok', `Đã cào được ${harvestedVideos.length} video thô ban đầu (chưa lọc)`);
 
-  // 3. GỬI THUMBNAIL CHO GEMINI VISION ĐỂ PHÂN TÍCH VÀ ĐỐI SOÁT CHÍNH XÁC SẢN PHẨM
-  let verifiedVideos = harvestedVideos;
+  // 3. GỬI THUMBNAIL VÀ TIÊU ĐỀ CHO GEMINI VISION ĐỂ PHÂN TÍCH VÀ ĐỐI SOÁT CHÍNH XÁC SẢN PHẨM
+  let verifiedVideos = [];
   try {
-    logger.info('STEP 7', `Đưa danh sách thumbnail video cho Gemini Vision đối soát trực quan với ảnh gốc...`);
-    verifiedVideos = await verifyTikTokCovers(gemini, originalImage, harvestedVideos);
+    logger.info('STEP 7', 'Đưa danh sách thumbnail và tiêu đề video cho Gemini Vision đối soát trực quan với ảnh gốc...');
+    const productContext = {
+      productTitle: pipelineState.cleaned1688?.title || topOffer?.title || pipelineState.sku,
+      sku: pipelineState.sku,
+      keywords: keywordsParam,
+      category: pipelineState.cleaned1688?.attributes?.['Loại'] || pipelineState.cleaned1688?.attributes?.['Tên sản phẩm'] || ''
+    };
+    verifiedVideos = await verifyTikTokCovers(gemini, originalImage, harvestedVideos, productContext);
   } catch (visErr) {
-    logger.warn('STEP 7', `Gemini Vision lọc bìa video gặp sự cố: ${visErr.message}. Tiếp nhận các video đã thu thập.`);
-    verifiedVideos = harvestedVideos;
+    logger.warn('STEP 7', `Gemini Vision lọc bìa video gặp sự cố: ${visErr.message}. Tiếp tục với các video đạt chuẩn.`);
+    verifiedVideos = [];
   }
 
   // Sắp xếp video theo lượt thích (Tym) giảm dần để ưu tiên video uy tín, nhiều tương tác
