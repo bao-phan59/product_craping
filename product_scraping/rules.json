@@ -125,7 +125,8 @@
         { "header": "Origin", "operation": "set", "value": "https://lens.google.com" }
       ],
       "responseHeaders": [
-        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "https://lens.google.com" },
+        { "header": "Access-Control-Allow-Credentials", "operation": "set", "value": "true" },
         { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
       ]
     },
@@ -277,5 +278,25 @@
       "urlFilter": "||byteoversea.com^",
       "resourceTypes": ["image", "xmlhttprequest", "other"]
     }
+  },
+  {
+    "id": 16,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://gemini.google.com" },
+        { "header": "Referer", "operation": "set", "value": "https://gemini.google.com/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, HEAD, POST, OPTIONS" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||content-push.googleapis.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
   }
 ]
+

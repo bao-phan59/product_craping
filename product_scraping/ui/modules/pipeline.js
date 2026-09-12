@@ -35,10 +35,17 @@ export { pipelineState, pausePipeline, resumePipeline, abortPipeline };
  * @param {Object} callbacks - { onProgress, onLog, onTickerItem, onComplete, onError, onCaptcha }
  */
 export async function runPipeline(config, callbacks = {}) {
-  const { sku, originalImage, clients } = config;
+  const { sku, originalImage, clients, settings = {} } = config;
   const { alibaba, shopee, tiktok, gemini } = clients || {};
 
-  resetPipelineState(sku, originalImage);
+  resetPipelineState(sku, originalImage, settings);
+
+  // Thiết lập thị trường Shopee tương ứng với cấu hình
+  if (shopee && typeof shopee.setDomain === 'function') {
+    const targetDomain = settings.shopeeMarket === 'vn' ? 'shopee.vn' : 'shopee.ph';
+    shopee.setDomain(targetDomain);
+    logger.info('PIPELINE', `Thị trường Shopee được cấu hình: ${targetDomain.toUpperCase()}`);
+  }
 
   ticker.clearTicker();
   logger.clearLogs();

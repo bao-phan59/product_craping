@@ -8,6 +8,7 @@ import { Endpoints } from './constants.js';
 export class GeminiMediaUploader {
   constructor(authManager) {
     this.auth = authManager;
+    this._cache = new Map();
   }
 
   /**
@@ -21,84 +22,97 @@ export class GeminiMediaUploader {
       return input;
     }
     if (typeof input === 'string') {
-      if (input.startsWith('data:')) {
-        const res = await fetch(input);
+      let url = input.trim();
+      if (url.startsWith('//')) {
+        url = 'https:' + url;
+      } else if (url.startsWith('http://')) {
+        url = 'https://' + url.slice(7);
+      }
+
+      if (url.startsWith('data:')) {
+        const res = await fetch(url);
         return await res.blob();
       }
       // URL ảnh
-      const res = await fetch(input);
+      const res = await fetch(url);
       return await res.blob();
     }
     throw new Error('Định dạng hình ảnh không hợp lệ (hỗ trợ Blob, File, Base64 data URL).');
   }
 
   /**
-   * Upload ảnh lên Google Push Service để lấy Media ID / URI
+   * Upload ảnh lên Google Push Service để lấy Media ID / URI (/contrib_service/ttl_1d/...)
    */
   async uploadImage(imageInput, filename = 'product_reference.jpg') {
+    if (imageInput && typeof imageInput === 'object' && (imageInput.mediaToken || imageInput.inline)) {
+      return imageInput;
+    }
+
+    if (typeof imageInput === 'string' && this._cache.has(imageInput)) {
+      return this._cache.get(imageInput);
+    }
+
     const blob = await this.toBlob(imageInput);
-    const size = blob.size;
     const mimeType = blob.type || 'image/jpeg';
 
+    let result = null;
     try {
-      // 1. Khởi tạo phiên upload
-      const pushUrl = `${Endpoints.UPLOAD}/`;
-      const initResponse = await fetch(pushUrl, {
+      // 1. Google Gemini Push Service Multipart Upload
+      const formData = new FormData();
+      formData.append('file', blob, filename);
+
+      const uploadUrl = Endpoints.UPLOAD.endsWith('/') ? Endpoints.UPLOAD.slice(0, -1) : Endpoints.UPLOAD;
+      const pushId = this.auth?.pushId || 'feeds/mcudyrk2a4khkz';
+
+      const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
         credentials: 'include',
         headers: {
-          'X-Goog-Upload-Command': 'start',
-          'X-Goog-Upload-Header-Content-Length': size.toString(),
-          'X-Goog-Upload-Header-Content-Type': mimeType,
-          'X-Goog-Upload-Protocol': 'resumable',
-          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+          'X-Tenant-Id': 'bard-storage',
+          'Push-ID': pushId,
+          'Origin': 'https://gemini.google.com',
+          'Referer': 'https://gemini.google.com/',
         },
-        body: JSON.stringify({
-          'File-Name': filename,
-        }),
+        body: formData,
       });
 
-      const uploadUrl = initResponse.headers.get('X-Goog-Upload-URL');
-      if (!uploadUrl) {
-        // Fallback: Sử dụng inline base64 descriptor nếu push service không mở upload URL
+      if (uploadRes.ok) {
+        const mediaToken = await uploadRes.text();
+        if (mediaToken && mediaToken.startsWith('/contrib_service/')) {
+          result = {
+            inline: false,
+            mediaToken: mediaToken.trim(),
+            filename: filename,
+            mimeType: mimeType,
+          };
+        }
+      }
+
+      if (!result) {
+        // Fallback: Sử dụng inline base64 nếu push service từ chối
         const base64Data = await this.blobToBase64(blob);
-        return {
+        result = {
           inline: true,
           base64: base64Data,
           mimeType: mimeType,
           filename: filename,
         };
       }
-
-      // 2. Upload nhị phân ảnh
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-Goog-Upload-Command': 'upload, finalize',
-          'X-Goog-Upload-Offset': '0',
-          'Content-Type': mimeType,
-        },
-        body: blob,
-      });
-
-      const mediaToken = await uploadRes.text();
-      return {
-        inline: false,
-        mediaToken: mediaToken.trim(),
-        filename: filename,
-        mimeType: mimeType,
-      };
     } catch (err) {
-      console.log('Google push upload failed, using inline base64 fallback:', err.message);
+      console.warn('GeminiMediaUploader: Push upload gặp lỗi, chuyển sang base64 fallback:', err.message);
       const base64Data = await this.blobToBase64(blob);
-      return {
+      result = {
         inline: true,
         base64: base64Data,
         mimeType: mimeType,
         filename: filename,
       };
     }
+
+    if (typeof imageInput === 'string' && result) {
+      this._cache.set(imageInput, result);
+    }
+    return result;
   }
 
   /**

@@ -40,19 +40,27 @@ export function setupShopeeModule({ shopee }) {
       items.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
+        const rawCover = item.coverImage || '';
+        const safeCover = (rawCover.startsWith('http://') || rawCover.startsWith('https://')) ? rawCover : '';
+        const safeName = escapeHtml(item.name || 'Sản phẩm Shopee');
+        const safePrice = Number(item.price || 0).toLocaleString('vi-VN');
+        const safeSold = Number(item.historicalSold || 0);
+        const safeStar = Number(item.ratingStar || 5);
+        const safeShopId = escapeHtml(item.shopId || '');
+
         card.innerHTML = `
           <div class="product-thumb-wrap">
-            <img class="product-thumb" src="${item.coverImage}" alt="${item.name}" referrerpolicy="no-referrer" loading="lazy">
+            <img class="product-thumb" src="${safeCover}" alt="${safeName}" referrerpolicy="no-referrer" loading="lazy">
           </div>
           <div class="product-info">
-            <div class="product-title" title="${item.name}">${item.name}</div>
+            <div class="product-title" title="${safeName}">${safeName}</div>
             <div class="product-price-row">
-              <span class="price-vnd">${Number(item.price).toLocaleString('vi-VN')} ₫</span>
-              <span style="font-size: 11px; color: #64748b;">Đã bán: ${item.historicalSold || 0}</span>
+              <span class="price-vnd">${safePrice} ₫</span>
+              <span style="font-size: 11px; color: #64748b;">Đã bán: ${safeSold}</span>
             </div>
             <div class="product-meta">
-              <span>⭐ ${item.ratingStar || 5}</span>
-              <span>Shop: ${item.shopId}</span>
+              <span>⭐ ${safeStar}</span>
+              <span>Shop: ${safeShopId}</span>
             </div>
             <div class="card-actions">
               <button class="btn-card-action btn-inspect-shopee">Xem Chi Tiết</button>
@@ -62,7 +70,7 @@ export function setupShopeeModule({ shopee }) {
         `;
 
         card.querySelector('.btn-inspect-shopee').addEventListener('click', () => {
-          inputUrl.value = item.shopeeUrl;
+          inputUrl.value = item.shopeeUrl || '';
           btnDetail.click();
         });
 
@@ -77,7 +85,7 @@ export function setupShopeeModule({ shopee }) {
       });
     } catch (err) {
       statusText.textContent = `Lỗi tìm kiếm: ${err.message}`;
-      resultsList.innerHTML = `<div style="color: #f87171; padding: 20px;">Lỗi: ${err.message}. Hãy mở một tab shopee.vn để bypass bot check.</div>`;
+      resultsList.innerHTML = `<div style="color: #f87171; padding: 20px;">Lỗi: ${escapeHtml(err.message)}. Hãy mở một tab Shopee để nạp phiên.</div>`;
     } finally {
       btnSearch.disabled = false;
     }
@@ -93,15 +101,20 @@ export function setupShopeeModule({ shopee }) {
     try {
       const p = await shopee.getItemByUrl(url);
       detailBox.style.display = 'block';
+      const safeDetailName = escapeHtml(p.name || 'Shopee Product');
+      const safeDetailPrice = Number(p.price || 0).toLocaleString('vi-VN');
+      const safeDetailCover = (p.coverImage && (p.coverImage.startsWith('http://') || p.coverImage.startsWith('https://'))) ? p.coverImage : '';
+      const safeDetailUrl = (p.shopeeUrl && (p.shopeeUrl.startsWith('http://') || p.shopeeUrl.startsWith('https://'))) ? p.shopeeUrl : '#';
+
       detailBox.innerHTML = `
         <div style="background: #111a2e; border: 1px solid #3b82f6; border-radius: 8px; padding: 14px; margin-bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap;">
-          <img src="${p.coverImage}" referrerpolicy="no-referrer" style="width: 140px; height: 140px; object-fit: cover; border-radius: 6px;">
+          <img src="${safeDetailCover}" referrerpolicy="no-referrer" style="width: 140px; height: 140px; object-fit: cover; border-radius: 6px;">
           <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px;">
-            <h3 style="font-size: 14px; color: #fff;">${p.name}</h3>
-            <div style="font-size: 16px; font-weight: bold; color: #ee4d2d;">${Number(p.price).toLocaleString('vi-VN')} ₫</div>
-            <div style="font-size: 12px; color: #94a3b8;">Đã bán: ${p.historicalSold} • Đánh giá: ⭐ ${p.ratingStar} (${p.ratingCount} lượt)</div>
+            <h3 style="font-size: 14px; color: #fff;">${safeDetailName}</h3>
+            <div style="font-size: 16px; font-weight: bold; color: #ee4d2d;">${safeDetailPrice} ₫</div>
+            <div style="font-size: 12px; color: #94a3b8;">Đã bán: ${Number(p.historicalSold || 0)} • Đánh giá: ⭐ ${Number(p.ratingStar || 5)} (${Number(p.ratingCount || 0)} lượt)</div>
             <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <a href="${p.shopeeUrl}" target="_blank" class="btn btn-shopee" style="font-size: 11px; padding: 5px 10px; text-decoration: none;">Mở Trên Shopee</a>
+              <a href="${safeDetailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-shopee" style="font-size: 11px; padding: 5px 10px; text-decoration: none;">Mở Trên Shopee</a>
               <button class="btn btn-1688 btn-source-p-1688" style="font-size: 11px; padding: 5px 10px;">Tìm Nguồn 1688 Bằng Ảnh Này</button>
             </div>
           </div>
@@ -122,4 +135,14 @@ export function setupShopeeModule({ shopee }) {
       btnDetail.disabled = false;
     }
   });
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

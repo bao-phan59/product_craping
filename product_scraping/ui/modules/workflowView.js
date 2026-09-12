@@ -22,7 +22,8 @@ import {
   bindInputEvents,
   resetInputForm,
   getCurrentImageSource,
-  getCurrentSku
+  getCurrentSku,
+  getWorkflowSettings
 } from './workflow/workflowInput.js';
 
 import { resetVerticalFeedUI, updateDataInspectorUI } from './workflow/workflowFeeds.js';
@@ -153,6 +154,7 @@ function handleResetForNewProduct() {
 async function startPipelineExecution() {
   const sku = getCurrentSku();
   const originalImage = getCurrentImageSource();
+  const settings = getWorkflowSettings();
 
   // Ẩn hộp lỗi & banner hoàn tất cũ nếu có
   const errorBox = document.getElementById('wfErrorDebugBox');
@@ -177,6 +179,7 @@ async function startPipelineExecution() {
     await pipeline.runPipeline({
       sku,
       originalImage,
+      settings,
       clients: clientsRef
     }, {
       onProgress: (step, percent, title, detail) => {
@@ -195,7 +198,7 @@ async function startPipelineExecution() {
         // 3. KHÔNG CƯỠNG BỨC THOÁT MÀN HÌNH!
         // Giữ nguyên Màn hình 2 để người dùng xem lại toàn bộ 5 tầng thẻ data & log bao lâu tùy ý.
         showProgressCompletionBanner(state);
-        showToast(`✅ Đã thu thập xong ${state.sku}! Dữ liệu & logs đã được lưu giữ.`);
+        showToast(`Đã thu thập xong ${state.sku}! Dữ liệu & logs đã được lưu giữ.`);
       },
       onError: (err, stepIndex, rawDetails) => {
         // GIỮ NGUYÊN MÀN HÌNH LOGS VÀ HIỂN THỊ HỘP DEBUG LỖI CỤ THỂ
@@ -246,7 +249,14 @@ export function restoreHistoricalRunToUI(runEntry) {
   // 4. Khôi phục ảnh Live Ticker
   ticker.clearTicker();
   (runEntry.valid1688Shops || []).forEach(s => {
-    if (s.imageUrl) ticker.addTickerItem(s.imageUrl, s.title, s.price);
+    if (s.imageUrl) {
+      ticker.addTickerItem({
+        type: '1688',
+        image: s.imageUrl,
+        title: s.title || '',
+        label: s.price ? `¥${s.price}` : '1688'
+      });
+    }
   });
 
   // 5. Khôi phục Terminal Logs
@@ -271,7 +281,7 @@ export function restoreHistoricalRunToUI(runEntry) {
 
   // 8. Chuyển sang Màn hình Tiến trình (Màn 2) để xem lại trọn vẹn
   switchWorkflowScreen('screenWorkflowProgress');
-  showToast(`👁️ Đã khôi phục dữ liệu phiên: ${runEntry.sku}`);
+  showToast(`Đã khôi phục dữ liệu phiên: ${runEntry.sku}`);
 }
 
 /**
@@ -333,28 +343,28 @@ function bindHistoryModalEvents() {
       card.className = 'wf-history-card';
       card.innerHTML = `
         <div class="wf-history-head">
-          <span class="wf-history-sku">📦 ${entry.sku}</span>
+          <span class="wf-history-sku">${entry.sku}</span>
           <span class="wf-history-time">${entry.dateStr || ''}</span>
         </div>
         <div class="wf-history-stats-bar">
-          <span class="wf-history-stat-tag">🏭 1688: ${stats.shop1688Count || 0}</span>
-          <span class="wf-history-stat-tag">🛒 Shopee: ${stats.shopeeCount || 0}</span>
-          <span class="wf-history-stat-tag">🎵 Video: ${stats.videoCount || 0}</span>
+          <span class="wf-history-stat-tag">1688: ${stats.shop1688Count || 0}</span>
+          <span class="wf-history-stat-tag">Shopee: ${stats.shopeeCount || 0}</span>
+          <span class="wf-history-stat-tag">Video: ${stats.videoCount || 0}</span>
           <span class="wf-history-stat-tag">⭐ Review: ${stats.reviewCount || 0}</span>
           <span class="wf-history-stat-tag wf-history-stat-margin">Margin: +${stats.margin || 0}%</span>
         </div>
         <div class="wf-history-actions">
           <button class="wf-btn-mini wf-btn-primary btn-restore-run" data-id="${entry.id}">
-            👁️ Xem Lại Toàn Bộ
+            Xem Lại Toàn Bộ
           </button>
           <button class="wf-btn-mini wf-btn-download btn-zip-run" data-id="${entry.id}">
-            📦 Tải ZIP
+            Tải ZIP
           </button>
           <button class="wf-btn-mini wf-btn-copy btn-tsv-run" data-id="${entry.id}">
-            📋 Copy TSV
+            Sao Chép TSV
           </button>
           <button class="wf-btn-mini wf-btn-danger btn-del-run" data-id="${entry.id}">
-            🗑️ Xóa
+            Xóa
           </button>
         </div>
       `;
@@ -392,7 +402,7 @@ function bindHistoryModalEvents() {
         const tsv = exporter.generateTsvString(entry);
         const ok = await exporter.copyTsvToClipboard(tsv);
         if (ok) {
-          showToast(`📋 Đã copy 24 cột TSV cho SKU: ${entry.sku}`);
+          showToast(`Đã copy 24 cột TSV cho SKU: ${entry.sku}`);
         }
       });
 

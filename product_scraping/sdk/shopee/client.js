@@ -25,6 +25,20 @@ export class ShopeeExtensionSDK {
   }
 
   /**
+   * Chuyển đổi linh hoạt thị trường Shopee (shopee.ph <-> shopee.vn)
+   * @param {'shopee.ph'|'shopee.vn'|string} domain
+   */
+  setDomain(domain) {
+    if (!domain) return;
+    const cleanDomain = domain.includes('vn') ? 'shopee.vn' : 'shopee.ph';
+    this.domain = cleanDomain;
+    this.endpoints = getShopeeEndpoints(cleanDomain);
+    this.defaultHeaders = getDefaultShopeeHeaders(cleanDomain);
+    this.options.domain = cleanDomain;
+    this.auth = new ShopeeAuthManager({ domain: cleanDomain });
+  }
+
+  /**
    * Khởi tạo và nạp phiên Cookie
    */
   async initialize() {
@@ -288,7 +302,19 @@ export class ShopeeExtensionSDK {
         throw error;
       }
 
-      const json = JSON.parse(responseText);
+      let json;
+      try {
+        json = JSON.parse(responseText);
+      } catch (parseErr) {
+        if (responseText && (responseText.includes('<html') || responseText.includes('<!DOCTYPE'))) {
+          const err = new Error(`Shopee trả về trang HTML thay vì JSON (có thể bị chặn bởi Cloudflare / Akamai).`);
+          err.status = res.status;
+          err.responseBody = responseText.slice(0, 500);
+          throw err;
+        }
+        throw new Error(`Lỗi parse JSON phản hồi Shopee: ${parseErr.message}`);
+      }
+
       if (json.error && json.error !== 0) {
         throw new Error(json.error_msg || `Shopee API trả về mã lỗi: ${json.error}`);
       }
@@ -346,6 +372,16 @@ export class ShopeeExtensionSDK {
       throw err;
     }
 
-    return JSON.parse(execution.text);
+    try {
+      return JSON.parse(execution.text);
+    } catch (e) {
+      if (execution.text && (execution.text.includes('<html') || execution.text.includes('<!DOCTYPE'))) {
+        const err = new Error('Shopee In-Tab trả về trang HTML thay vì JSON (yêu cầu Captcha hoặc xác thực).');
+        err.status = execution.status;
+        err.responseBody = execution.text.slice(0, 500);
+        throw err;
+      }
+      throw new Error(`Lỗi parse dữ liệu từ Shopee Tab: ${e.message}`);
+    }
   }
 }

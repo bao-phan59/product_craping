@@ -12,22 +12,33 @@
  */
 export function mergeProductData(cleaned1688, shopeeShops = [], rates = { cnyVnd: 3550, phpVnd: 450 }) {
   const topShopee = shopeeShops[0] || {};
-  
+  const isVn = (topShopee.itemUrl || '').includes('shopee.vn') || (topShopee.domain === 'shopee.vn');
+  const shopeeDomain = isVn ? 'shopee.vn' : 'shopee.ph';
+
   // Tính toán giá đối sánh
   const cnyBasePrice = cleaned1688 ? cleaned1688.basePrice : 0;
   const costVND = Math.round(cnyBasePrice * rates.cnyVnd);
-  
-  const phpRetailPrice = Number(topShopee.pricePHP || (topShopee.price && topShopee.price > 100000 ? topShopee.price / 100000 : topShopee.price) || 0);
-  const retailVND = Math.round(phpRetailPrice * rates.phpVnd);
-  
+
+  let phpRetailPrice = 0;
+  let retailVND = 0;
+
+  if (isVn) {
+    retailVND = Number(topShopee.priceVnd || topShopee.price || 0);
+    phpRetailPrice = rates.phpVnd > 0 ? Math.round(retailVND / rates.phpVnd) : 0;
+  } else {
+    phpRetailPrice = Number(topShopee.pricePHP || (topShopee.price && topShopee.price > 100000 ? topShopee.price / 100000 : topShopee.price) || 0);
+    retailVND = Math.round(phpRetailPrice * rates.phpVnd);
+  }
+
   // Tỷ lệ lợi nhuận gộp ước tính
   const estimatedMarginPercent = retailVND > 0 && costVND > 0
     ? Math.round(((retailVND - costVND) / retailVND) * 100)
     : 0;
 
-  // Hợp nhất thuộc tính kỹ thuật
+  // Hợp nhất thuộc tính kỹ thuật đầy đủ (bảo lưu toàn bộ)
   const specs = {
-    ...((cleaned1688 && cleaned1688.attributes) || {}),
+    ...((cleaned1688 && (cleaned1688.rawAttributes || cleaned1688.attributes)) || {}),
+    ...((cleaned1688 && cleaned1688.detailedSpecs) || {}),
     ...((topShopee && topShopee.attributes) || {})
   };
 
@@ -41,23 +52,29 @@ export function mergeProductData(cleaned1688, shopeeShops = [], rates = { cnyVnd
       wholesaleVND: costVND,
       retailPHP: phpRetailPrice,
       retailVND: retailVND,
+      currency: isVn ? 'VND' : 'PHP',
       marginPercent: estimatedMarginPercent,
       priceRanges1688: (cleaned1688 && cleaned1688.priceRanges) || []
     },
     top1688Url: cleaned1688 ? (cleaned1688.offerUrl || cleaned1688.detailUrl) : '',
-    topShopeeUrl: topShopee.itemUrl || (topShopee.itemId ? `https://shopee.ph/product/${topShopee.shopId}/${topShopee.itemId}` : ''),
+    topShopeeUrl: topShopee.itemUrl || (topShopee.itemId ? `https://${shopeeDomain}/product/${topShopee.shopId}/${topShopee.itemId}` : ''),
     specifications: specs,
+    descriptionParagraphs: (cleaned1688 && cleaned1688.descriptionParagraphs) || null,
     cleanDescription: cleaned1688 ? cleaned1688.description : '',
-    shopeeShopsSummary: shopeeShops.map((s, idx) => ({
-      rank: idx + 1,
-      shopId: s.shopId,
-      itemId: s.itemId,
-      title: s.title,
-      pricePHP: Number(s.pricePHP || (s.price && s.price > 100000 ? s.price / 100000 : s.price) || 0),
-      historicalSold: s.historicalSold || 0,
-      itemRating: s.itemRating || 5.0,
-      url: s.itemUrl || `https://shopee.ph/product/${s.shopId}/${s.itemId}`
-    }))
+    shopeeShopsSummary: shopeeShops.map((s, idx) => {
+      const sDomain = (s.itemUrl || '').includes('shopee.vn') ? 'shopee.vn' : (s.domain || shopeeDomain);
+      return {
+        rank: idx + 1,
+        shopId: s.shopId,
+        itemId: s.itemId,
+        title: s.title,
+        pricePHP: Number(s.pricePHP || (s.price && s.price > 100000 ? s.price / 100000 : s.price) || 0),
+        priceVnd: Number(s.priceVnd || s.price || 0),
+        historicalSold: s.historicalSold || 0,
+        itemRating: s.itemRating || 5.0,
+        url: s.itemUrl || `https://${sDomain}/product/${s.shopId}/${s.itemId}`
+      };
+    })
   };
 }
 

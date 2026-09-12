@@ -36,7 +36,7 @@ export function bindResultEvents({ onNewProduct, getPipelineState, switchWorkflo
     btnDownloadResultLog.addEventListener('click', () => {
       const state = getPipelineState ? getPipelineState() : {};
       logger.downloadLogsAsFile(state.sku || 'WORKFLOW');
-      showToast('📥 Đang tải xuống toàn bộ file log...');
+      showToast('Đang tải xuống toàn bộ file log...');
     });
   }
 
@@ -96,7 +96,7 @@ export function bindResultEvents({ onNewProduct, getPipelineState, switchWorkflo
         alert('Lỗi tải file ZIP: ' + err.message);
       } finally {
         btnDownloadZip.disabled = false;
-        btnDownloadZip.innerHTML = '<span>📦</span> Tải File ZIP';
+        btnDownloadZip.innerHTML = 'Tải File ZIP';
       }
     });
   }
@@ -108,7 +108,7 @@ export function bindResultEvents({ onNewProduct, getPipelineState, switchWorkflo
       const tsv = exporter.generateTsvString(state);
       const ok = await exporter.copyTsvToClipboard(tsv);
       if (ok) {
-        showToast('📋 Đã sao chép 24 cột dữ liệu vào Clipboard! Hãy dán (Ctrl+V) vào Google Sheets hoặc Excel.');
+        showToast('Đã sao chép 24 cột dữ liệu vào Clipboard! Hãy dán (Ctrl+V) vào Google Sheets hoặc Excel.');
       } else {
         alert('Không thể sao chép vào Clipboard!');
       }
@@ -199,16 +199,22 @@ function renderVideosTab(state) {
     const safeVideoUrl = v.videoUrl || '#';
 
     card.innerHTML = `
-      <img src="${safeCover}" class="wf-video-thumb" onerror="this.src='${SAFE_THUMB_SVG}'" loading="lazy" />
+      <img src="${safeCover}" class="wf-video-thumb" loading="lazy" />
       <div class="wf-video-meta">
         <div class="wf-video-badge-row" style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
-          <span class="wf-video-badge" style="background:#ff0050; color:#fff; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:bold;">❤️ ${likesText}</span>
-          <span class="wf-platform-tag" style="background:${isDouyin ? '#fe2c55' : '#25f4ee'}; color:#000; border-radius:4px; padding:2px 6px; font-size:10px; font-weight:bold;">${platformName}</span>
+          <span class="wf-video-badge" style="background:#B8855C; color:#fff; border-radius:4px; padding:2px 8px; font-size: 13px; font-weight:600;">${likesText}</span>
+          <span class="wf-platform-tag" style="background:${isDouyin ? '#8C684E' : '#B25A38'}; color:#fff; border-radius:4px; padding:2px 8px; font-size: 12.5px; font-weight:600;">${platformName}</span>
         </div>
-        <div class="wf-video-title" title="${safeTitle}" style="font-weight:600; font-size:12px; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeTitle}</div>
-        <a href="${safeVideoUrl}" target="_blank" rel="noopener noreferrer" class="wf-video-link" style="color:#00e5ff; font-size:11px; text-decoration:none;">🔗 Xem trên ${platformName}</a>
+        <div class="wf-video-title" title="${safeTitle}" style="font-weight:600; font-size:13.5px; margin-bottom:4px; line-height:1.4; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeTitle}</div>
+        <a href="${safeVideoUrl}" target="_blank" rel="noopener noreferrer" class="wf-video-link" style="color:#C69265; font-size: 13.5px; text-decoration:none;">Xem trên ${platformName} ↗</a>
       </div>
     `;
+
+    const imgEl = card.querySelector('img');
+    if (imgEl) {
+      imgEl.addEventListener('error', () => { imgEl.src = SAFE_THUMB_SVG; });
+    }
+
     vidContainer.appendChild(card);
   });
 }
@@ -217,20 +223,69 @@ function renderReviewsTab(state) {
   const revContainer = document.getElementById('wfResultReviewsList');
   if (!revContainer) return;
   revContainer.innerHTML = '';
-  (state.topReviews || []).forEach((r, idx) => {
+
+  const allReviews = (state.allVerifiedReviews && state.allVerifiedReviews.length > 0)
+    ? state.allVerifiedReviews
+    : (state.topReviews || []);
+
+  const lpReviews = allReviews.filter(r => r.useForLandingPage);
+  const otherReviews = allReviews.filter(r => !r.useForLandingPage);
+
+  const renderCard = (r, idx, isLp = false) => {
     const card = document.createElement('div');
-    card.className = 'wf-review-card';
-    const imagesHtml = (r.images || []).map(img => `<img src="${img}" class="wf-review-img-thumb" />`).join('');
+    card.className = `wf-review-card ${isLp ? 'wf-review-lp-ready' : ''}`;
+    if (isLp) {
+      card.style.borderColor = 'rgba(198, 146, 101, 0.4)';
+      card.style.background = 'rgba(198, 146, 101, 0.06)';
+    }
+
+    const safeAuthor = escapeHtml(r.author || 'Người mua Shopee');
+    const safeComment = escapeHtml(r.comment || 'Không có nhận xét');
+    const lpBadge = isLp
+      ? `<span style="background:#B8855C; color:#fff; font-weight:700; font-size: 12px; padding:2px 8px; border-radius:4px; display:inline-flex; align-items:center;">ĐẠT CHUẨN LANDING PAGE (${r.landingPageScore || 9}/10)</span>`
+      : '';
+
+    const imagesHtml = (r.images || [])
+      .filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('data:image/')))
+      .map(img => `<img src="${escapeHtml(img)}" class="wf-review-img-thumb" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:1px solid rgba(255,255,255,0.15);" loading="lazy" />`)
+      .join('');
+
     card.innerHTML = `
-      <div class="wf-review-head">
-        <span class="wf-review-author">⭐ #${idx + 1} - ${r.author}</span>
-        <span class="wf-review-stars">⭐⭐⭐⭐⭐</span>
+      <div class="wf-review-head" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+        <span class="wf-review-author" style="font-size: 13.5px; font-weight:600; color:#F5EFEB;">Khách hàng #${idx + 1}: ${safeAuthor}</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${lpBadge}
+          <span class="wf-review-stars" style="font-size: 12.5px; color:#C98A4B; font-weight:600;">5/5 Sao</span>
+        </div>
       </div>
-      <div class="wf-review-body">${r.comment}</div>
-      <div class="wf-review-media">${imagesHtml}</div>
+      <div class="wf-review-body" style="margin: 8px 0; font-size:13.5px; line-height:1.55; color:#F5EFEB;">${safeComment}</div>
+      ${imagesHtml ? `<div class="wf-review-media" style="display:flex; gap:8px; flex-wrap:wrap;">${imagesHtml}</div>` : ''}
+      ${r.auditReason ? `<div style="font-size: 12.5px; color:#D1C0B4; margin-top:6px; font-style:italic;">Gemini Thẩm Định: ${escapeHtml(r.auditReason)}</div>` : ''}
     `;
-    revContainer.appendChild(card);
-  });
+    return card;
+  };
+
+  if (lpReviews.length > 0) {
+    const lpHeader = document.createElement('div');
+    lpHeader.style.cssText = 'color:#eab308; font-weight:bold; font-size:13px; margin: 8px 0 4px; display:flex; align-items:center; gap:6px;';
+    lpHeader.innerHTML = `TOP ĐÁNH GIÁ CHUẨN LANDING PAGE (${lpReviews.length} Review Ảnh Đẹp + Comment Uy Tín):`;
+    revContainer.appendChild(lpHeader);
+
+    lpReviews.forEach((r, idx) => {
+      revContainer.appendChild(renderCard(r, idx, true));
+    });
+  }
+
+  if (otherReviews.length > 0) {
+    const otherHeader = document.createElement('div');
+    otherHeader.style.cssText = 'color:#94a3b8; font-weight:bold; font-size:12px; margin: 16px 0 4px;';
+    otherHeader.textContent = `TẤT CẢ ĐÁNH GIÁ 5 SAO KHÁC (${otherReviews.length}):`;
+    revContainer.appendChild(otherHeader);
+
+    otherReviews.forEach((r, idx) => {
+      revContainer.appendChild(renderCard(r, lpReviews.length + idx, false));
+    });
+  }
 }
 
 function renderPricingAndSpecsTab(state) {
@@ -239,6 +294,11 @@ function renderPricingAndSpecsTab(state) {
 
   const enriched = state.enrichedData || {};
   const p = enriched.pricing || {};
+  const dp = state.cleaned1688?.descriptionParagraphs || enriched.descriptionParagraphs || {};
+  const isVn = (p.currency === 'VND') || ((state.shopeeShops?.[0]?.itemUrl || '').includes('shopee.vn'));
+  const retailLabel = isVn ? 'Giá Bán Lẻ Shopee VN' : 'Giá Bán Lẻ Shopee PH';
+  const retailFormatted = isVn ? `${(p.retailVND || 0).toLocaleString()} ₫` : `₱${p.retailPHP || 0} (~${(p.retailVND || 0).toLocaleString()} đ)`;
+
   specsContainer.innerHTML = `
     <div class="wf-pricing-grid">
       <div class="wf-price-box">
@@ -246,18 +306,46 @@ function renderPricingAndSpecsTab(state) {
         <div class="wf-price-val">¥${p.wholesaleCNY || 0} (~${(p.wholesaleVND || 0).toLocaleString()} đ)</div>
       </div>
       <div class="wf-price-box">
-        <div class="wf-price-label">Giá Bán Lẻ Shopee PH</div>
-        <div class="wf-price-val">₱${p.retailPHP || 0} (~${(p.retailVND || 0).toLocaleString()} đ)</div>
+        <div class="wf-price-label">${retailLabel}</div>
+        <div class="wf-price-val">${retailFormatted}</div>
       </div>
       <div class="wf-price-box wf-price-highlight">
         <div class="wf-price-label">Biên Lợi Nhuận Gộp</div>
         <div class="wf-price-val">${p.marginPercent || 0}%</div>
       </div>
     </div>
-    <div class="wf-specs-detail">
-      <h4>📋 Thuộc Tính Kỹ Thuật Hợp Nhất (Specs):</h4>
-      <ul>
-        ${Object.entries(enriched.specifications || {}).map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`).join('') || '<li>Chưa có thông số chi tiết</li>'}
+
+    <!-- CÁC ĐOẠN VĂN BẢN MÔ TẢ ĐẦY ĐỦ THÔ (PARAGRAPHS) -->
+    <div class="wf-paragraphs-box" style="background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+      <h4 style="margin:0; font-size:13px; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+        Toàn Bộ Đoạn Văn Bản Mô Tả Sản Phẩm (Dữ Liệu Thô Đầy Đủ):
+      </h4>
+      <div style="font-size:12px; line-height:1.6; color:#cbd5e1; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px; border-left:3px solid #38bdf8;">
+        <strong style="color:#f1f5f9;">1. Tổng Quan Sản Phẩm & Nguồn Gốc:</strong><br/>
+        ${escapeHtml(dp.overview || 'Đang cập nhật...')}
+      </div>
+      <div style="font-size:12px; line-height:1.6; color:#cbd5e1; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px; border-left:3px solid #10b981;">
+        <strong style="color:#f1f5f9;">2. Phân Tích Kỹ Thuật, Vật Liệu & Kết Cấu:</strong><br/>
+        ${escapeHtml(dp.technicalBuild || dp.highlights || 'Đang cập nhật...')}
+      </div>
+      <div style="font-size:12px; line-height:1.6; color:#cbd5e1; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px; border-left:3px solid #a855f7;">
+        <strong style="color:#f1f5f9;">3. Bối Cảnh Ứng Dụng & Hướng Dẫn Sử Dụng Thực Tế:</strong><br/>
+        ${escapeHtml(dp.applications || 'Đang cập nhật...')}
+      </div>
+      <div style="font-size:12px; line-height:1.6; color:#cbd5e1; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px; border-left:3px solid #f59e0b;">
+        <strong style="color:#f1f5f9;">4. Điểm Vượt Trội & Lợi Thế Cạnh Tranh:</strong><br/>
+        ${escapeHtml(dp.highlights || 'Đang cập nhật...')}
+      </div>
+    </div>
+
+    <div class="wf-specs-detail" style="margin-top:12px;">
+      <h4 style="margin-bottom:8px; font-size:13.5px; color:#e2e8f0;">Bảng Toàn Bộ Thông Số Kỹ Thuật (Specs Dictionary):</h4>
+      <ul style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:6px; padding-left:0; list-style:none;">
+        ${Object.entries(enriched.specifications || {}).map(([k, v]) => `
+          <li style="background:rgba(255,255,255,0.03); padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.06); font-size: 13.5px;">
+            <strong style="color:#94a3b8;">${escapeHtml(k)}:</strong> <span style="color:#f1f5f9;">${escapeHtml(v)}</span>
+          </li>
+        `).join('') || '<li style="font-size: 13.5px; color:#64748b;">Chưa có thông số chi tiết</li>'}
       </ul>
     </div>
   `;
@@ -287,26 +375,26 @@ export function renderProcessDataResult(state) {
       <!-- 1. SO SÁNH 1688: DỮ LIỆU THÔ VS GEMINI VISION ĐÃ LỌC -->
       <div class="wf-insp-content-box">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="color: #60a5fa; font-weight: bold; font-size: 13px;">📸 1. NGUỒN SỈ 1688: THÔ (${raw1688.length || verified1688.length} Xưởng) VS GEMINI VISION (${verified1688.length} Xưởng Đạt Chuẩn)</span>
+          <span style="color: #60a5fa; font-weight: bold; font-size: 13px;">1. NGUỒN SỈ 1688: THÔ (${raw1688.length || verified1688.length} Xưởng) VS GEMINI VISION (${verified1688.length} Xưởng Đạt Chuẩn)</span>
           <span class="wf-feed-pill pill-orange">${verified1688.length} Shop Chuẩn</span>
         </div>
-        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+        <div style="font-size: 13.5px; color: #94a3b8; margin-bottom: 8px;">
           Danh sách toàn bộ ảnh thô cào về từ 1688 Visual API. Gemini Vision đối soát từng ảnh thumbnail với ảnh gốc để chọn 5 xưởng chuẩn xác nhất:
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 220px; overflow-y: auto; padding: 2px;">
           ${(raw1688.length > 0 ? raw1688 : verified1688).map((s, idx) => {
             const isMatch = verified1688.some(v => String(v.offerId || v.id) === String(s.offerId || s.id));
             const badge = isMatch
-              ? '<span class="wf-status-badge pass">✓ Gemini Chọn</span>'
-              : (verified1688.length > 0 ? '<span class="wf-status-badge reject">✗ Không Khớp</span>' : '<span class="wf-status-badge pending">📦 Thô</span>');
+              ? '<span class="wf-status-badge pass">Gemini Chọn</span>'
+              : (verified1688.length > 0 ? '<span class="wf-status-badge reject">Không Khớp</span>' : '<span class="wf-status-badge pending">Thô</span>');
             return `
               <div style="background: rgba(2,6,23,0.7); border: 1px solid ${isMatch ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.08)'}; border-radius: 6px; overflow: hidden; padding: 4px;">
                 <div style="position: relative; width: 100%; height: 75px;">
                   <img src="${s.imageUrl || SAFE_THUMB_SVG}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" loading="lazy" />
                   <div style="position: absolute; bottom: 2px; left: 2px;">${badge}</div>
                 </div>
-                <div style="font-size: 10px; font-weight: bold; color: #34d399; margin-top: 3px;">¥${s.price || s.pricing?.priceCny || 'N/A'}</div>
-                <div style="font-size: 9px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(s.title || '')}">#${idx + 1}. ${escapeHtml(s.title || '1688 Offer')}</div>
+                <div style="font-size: 12.5px; font-weight: bold; color: #34d399; margin-top: 3px;">¥${s.price || s.pricing?.priceCny || 'N/A'}</div>
+                <div style="font-size: 12px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(s.title || '')}">#${idx + 1}. ${escapeHtml(s.title || '1688 Offer')}</div>
               </div>
             `;
           }).join('')}
@@ -316,26 +404,26 @@ export function renderProcessDataResult(state) {
       <!-- 2. SO SÁNH SHOPEE PH: DỮ LIỆU THÔ VS GEMINI VISION ĐÃ CHỌN -->
       <div class="wf-insp-content-box">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="color: #38bdf8; font-weight: bold; font-size: 13px;">🛒 2. BÁN LẺ SHOPEE PH: THÔ (${rawShopee.length || verifiedShopee.length} SP) VS GEMINI VISION (${verifiedShopee.length} SP Khớp Mẫu)</span>
+          <span style="color: #38bdf8; font-weight: bold; font-size: 13px;">2. BÁN LẺ SHOPEE: THÔ (${rawShopee.length || verifiedShopee.length} SP) VS GEMINI VISION (${verifiedShopee.length} SP Khớp Mẫu)</span>
           <span class="wf-feed-pill pill-green">${verifiedShopee.length} SP Chuẩn Mẫu</span>
         </div>
-        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+        <div style="font-size: 13.5px; color: #94a3b8; margin-bottom: 8px;">
           Sản phẩm tìm thấy qua các từ khóa generic trên Shopee PH được Gemini Vision thẩm định thị giác để loại bỏ các biến thể lệch model:
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; max-height: 220px; overflow-y: auto; padding: 2px;">
           ${(rawShopee.length > 0 ? rawShopee : verifiedShopee).map((s, idx) => {
             const isMatch = verifiedShopee.some(v => String(v.itemId) === String(s.itemId));
             const badge = isMatch
-              ? '<span class="wf-status-badge pass">✓ Khớp Mẫu</span>'
-              : (verifiedShopee.length > 0 ? '<span class="wf-status-badge reject">✗ Lệch Mẫu</span>' : '<span class="wf-status-badge pending">📦 Thô</span>');
+              ? '<span class="wf-status-badge pass">Khớp Mẫu</span>'
+              : (verifiedShopee.length > 0 ? '<span class="wf-status-badge reject">Lệch Mẫu</span>' : '<span class="wf-status-badge pending">Thô</span>');
             return `
               <div style="background: rgba(2,6,23,0.7); border: 1px solid ${isMatch ? 'rgba(56,189,248,0.5)' : 'rgba(255,255,255,0.08)'}; border-radius: 6px; overflow: hidden; padding: 4px;">
                 <div style="position: relative; width: 100%; height: 75px;">
                   <img src="${s.coverImage || s.imageUrl || SAFE_THUMB_SVG}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" loading="lazy" />
                   <div style="position: absolute; bottom: 2px; left: 2px;">${badge}</div>
                 </div>
-                <div style="font-size: 10px; font-weight: bold; color: #f59e0b; margin-top: 3px;">${s.priceFormatted || ('₱' + (s.price || 0))}</div>
-                <div style="font-size: 9px; color: #cbd5e1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2;" title="${escapeHtml(s.title || '')}">#${idx + 1}. ${escapeHtml(s.title || 'Shopee Item')}</div>
+                <div style="font-size: 12.5px; font-weight: bold; color: #f59e0b; margin-top: 3px;">${s.priceFormatted || ('₱' + (s.price || 0))}</div>
+                <div style="font-size: 12px; color: #cbd5e1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2;" title="${escapeHtml(s.title || '')}">#${idx + 1}. ${escapeHtml(s.title || 'Shopee Item')}</div>
               </div>
             `;
           }).join('')}
@@ -345,27 +433,27 @@ export function renderProcessDataResult(state) {
       <!-- 3. SO SÁNH VIDEO DOUYIN & TIKTOK: THÔ VS GEMINI VISION XÁC NHẬN -->
       <div class="wf-insp-content-box">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="color: #f43f5e; font-weight: bold; font-size: 13px;">🎬 3. VIDEO DOUYIN & TIKTOK: THÔ (${rawVideos.length || verifiedVideos.length} Video) VS GEMINI VISION (${verifiedVideos.length} Video Chuẩn)</span>
+          <span style="color: #f43f5e; font-weight: bold; font-size: 13px;">3. VIDEO DOUYIN & TIKTOK: THÔ (${rawVideos.length || verifiedVideos.length} Video) VS GEMINI VISION (${verifiedVideos.length} Video Chuẩn)</span>
           <span class="wf-feed-pill pill-pink">${verifiedVideos.length} Video Đã Duyệt</span>
         </div>
-        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+        <div style="font-size: 13.5px; color: #94a3b8; margin-bottom: 8px;">
           Toàn bộ video cào được từ Douyin và TikTok. Gemini Vision đóng vai trò Auditor kiểm tra ảnh bìa có quay đúng sản phẩm mục tiêu:
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 240px; overflow-y: auto; padding: 2px;">
           ${(rawVideos.length > 0 ? rawVideos : verifiedVideos).map((v, idx) => {
             const isMatch = verifiedVideos.some(ver => String(ver.videoId) === String(v.videoId));
             const badge = isMatch
-              ? '<span class="wf-status-badge pass">✓ Gemini Xác Nhận</span>'
-              : (verifiedVideos.length > 0 ? '<span class="wf-status-badge reject">✗ Không Thấy SP</span>' : '<span class="wf-status-badge pending">📦 Video Thô</span>');
-            const reason = v.visionReason ? `<div style="font-size: 8px; color: #34d399; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(v.visionReason)}">${escapeHtml(v.visionReason)}</div>` : '';
+              ? '<span class="wf-status-badge pass">Gemini Xác Nhận</span>'
+              : (verifiedVideos.length > 0 ? '<span class="wf-status-badge reject">Không Thấy Sản Phẩm</span>' : '<span class="wf-status-badge pending">Video Thô</span>');
+            const reason = v.visionReason ? `<div style="font-size: 11.5px; color: #34d399; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(v.visionReason)}">${escapeHtml(v.visionReason)}</div>` : '';
             return `
               <div style="background: rgba(2,6,23,0.7); border: 1px solid ${isMatch ? 'rgba(244,63,94,0.5)' : 'rgba(255,255,255,0.08)'}; border-radius: 6px; overflow: hidden; padding: 4px;">
                 <div style="position: relative; width: 100%; height: 80px;">
                   <img src="${v.coverUrl || SAFE_THUMB_SVG}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" loading="lazy" />
                   <div style="position: absolute; bottom: 2px; left: 2px;">${badge}</div>
-                  <span style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.75); color: #fff; font-size: 8px; padding: 1px 4px; border-radius: 3px;">❤️ ${v.formattedLikes || v.likeCount || v.diggCount || '0'}</span>
+                  <span style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11.5px; padding: 1px 4px; border-radius: 3px;">${v.formattedLikes || v.likeCount || v.diggCount || '0'} thích</span>
                 </div>
-                <div style="font-size: 9px; font-weight: 600; color: #cbd5e1; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(v.title || '')}">#${idx + 1}. ${escapeHtml(v.title || 'Video')}</div>
+                <div style="font-size: 12px; font-weight: 600; color: #cbd5e1; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(v.title || '')}">#${idx + 1}. ${escapeHtml(v.title || 'Video')}</div>
                 ${reason}
               </div>
             `;
@@ -375,23 +463,23 @@ export function renderProcessDataResult(state) {
 
       <!-- 4. TỪ KHÓA ĐA KÊNH DO GEMINI TẠO RA -->
       <div class="wf-insp-content-box">
-        <div style="color:#a78bfa; font-weight:bold; font-size:12px; margin-bottom: 6px;">🤖 4. BỘ TỪ KHÓA ĐA KÊNH (DOUYIN, TIKTOK, SHOPEE)</div>
+        <div style="color:#a78bfa; font-weight:bold; font-size:13px; margin-bottom: 6px;">4. BỘ TỪ KHÓA ĐA KÊNH (DOUYIN, TIKTOK, SHOPEE)</div>
         <div style="margin-bottom: 6px;">
-          <div style="font-size:10px; color:#fb923c; font-weight:600;">🇨🇳 Douyin Tiếng Trung:</div>
+          <div style="font-size: 12.5px; color:#fb923c; font-weight:600;">Douyin Tiếng Trung:</div>
           <div class="wf-tag-cloud">
-            ${(kws.douyinKeywords || []).map(k => `<span class="wf-data-tag" style="background:rgba(251,146,60,0.15); border-color:rgba(251,146,60,0.4); color:#fdba74;">🔍 ${escapeHtml(k)}</span>`).join('')}
+            ${(kws.douyinKeywords || []).map(k => `<span class="wf-data-tag" style="background:rgba(251,146,60,0.15); border-color:rgba(251,146,60,0.4); color:#fdba74;">${escapeHtml(k)}</span>`).join('')}
           </div>
         </div>
         <div style="margin-bottom: 6px;">
-          <div style="font-size:10px; color:#38bdf8; font-weight:600;">🛒 Shopee PH:</div>
+          <div style="font-size: 12.5px; color:#38bdf8; font-weight:600;">Shopee:</div>
           <div class="wf-tag-cloud">
-            ${(kws.shopeeKeywords || []).map(k => `<span class="wf-data-tag">🔍 ${escapeHtml(k)}</span>`).join('')}
+            ${(kws.shopeeKeywords || []).map(k => `<span class="wf-data-tag">${escapeHtml(k)}</span>`).join('')}
           </div>
         </div>
         <div>
-          <div style="font-size:10px; color:#fb7185; font-weight:600;">🎵 TikTok:</div>
+          <div style="font-size: 12.5px; color:#fb7185; font-weight:600;">TikTok:</div>
           <div class="wf-tag-cloud">
-            ${(kws.tiktokKeywords || []).map(q => `<span class="wf-data-tag-tiktok">🎵 ${escapeHtml(q)}</span>`).join('')}
+            ${(kws.tiktokKeywords || []).map(q => `<span class="wf-data-tag-tiktok">${escapeHtml(q)}</span>`).join('')}
           </div>
         </div>
       </div>

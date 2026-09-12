@@ -12,7 +12,8 @@
     "tabs",
     "activeTab",
     "contextMenus",
-    "downloads"
+    "downloads",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://*/*",
@@ -32,11 +33,15 @@
     "https://1688.com/*",
     "https://*.alicdn.com/*"
   ],
+  "icons": {
+    "128": "assets/icon.png"
+  },
   "side_panel": {
     "default_path": "ui/index.html"
   },
   "action": {
-    "default_title": "Mở Product Scraping Studio (Ghim Cố Định)"
+    "default_title": "Product Scraping Studio",
+    "default_icon": "assets/icon.png"
   },
   "declarative_net_request": {
     "rule_resources": [

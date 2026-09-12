@@ -146,6 +146,16 @@ export class GeminiAuthManager {
    * Khởi tạo toàn bộ chu trình xác thực
    */
   async initialize() {
+    if (this.isSessionValid()) {
+      return {
+        authenticated: true,
+        actionToken: this.actionToken,
+        buildLabel: this.buildLabel,
+        sessionId: this.sessionId,
+        secure1PSID: this.secure1PSID,
+      };
+    }
+
     const cookieStatus = await this.extractCookies();
     if (!cookieStatus.authenticated) {
       return cookieStatus;

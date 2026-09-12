@@ -92,8 +92,50 @@ export async function createZipBundle(pipelineState) {
   // 3. File enriched_product_data.json
   rootFolder.file('enriched_product_data.json', JSON.stringify(pipelineState.enrichedData || {}, null, 2));
 
-  // 4. File reviews_top10.json
-  rootFolder.file('reviews_top10.json', JSON.stringify(pipelineState.topReviews || [], null, 2));
+  // 4. File reviews_top10.json & landing_page_reviews.json
+  rootFolder.file('reviews_all_verified.json', JSON.stringify(pipelineState.topReviews || [], null, 2));
+  const lpReviews = (pipelineState.landingPageReviews || []).length > 0
+    ? pipelineState.landingPageReviews
+    : (pipelineState.topReviews || []).filter(r => r.useForLandingPage);
+  rootFolder.file('landing_page_reviews.json', JSON.stringify(lpReviews, null, 2));
+
+  // 5. File all_raw_specs.json (100% data thô từ các sàn)
+  const rawSpecs = {
+    sku,
+    productNameVi: pipelineState.cleaned1688?.productNameVi || '',
+    productNameEn: pipelineState.cleaned1688?.productNameEn || '',
+    descriptionParagraphs: pipelineState.cleaned1688?.descriptionParagraphs || {},
+    detailedSpecs: pipelineState.cleaned1688?.detailedSpecs || {},
+    rawAttributesDictionary: pipelineState.cleaned1688?.rawAttributesDictionary || {},
+    total1688Factories: (pipelineState.valid1688Shops || []).length,
+    factories1688: pipelineState.valid1688Shops || [],
+    topSoldShopeeShops: pipelineState.shopeeShops || []
+  };
+  rootFolder.file('all_raw_specs.json', JSON.stringify(rawSpecs, null, 2));
+
+  // 6. File product_descriptions.txt (Toàn bộ các đoạn văn bản mô tả đầy đủ)
+  const dp = pipelineState.cleaned1688?.descriptionParagraphs || {};
+  const descText = `MÔ TẢ CHI TIẾT SẢN PHẨM (${sku})
+Tên sản phẩm (Việt): ${pipelineState.cleaned1688?.productNameVi || ''}
+Tên generic (Anh): ${pipelineState.cleaned1688?.productNameEn || ''}
+
+==================================================
+1. TỔNG QUAN CHI TIẾT SẢN PHẨM:
+${dp.overview || 'Đang cập nhật'}
+
+==================================================
+2. PHÂN TÍCH KẾT CẤU KỸ THUẬT & VẬT LIỆU:
+${dp.technicalBuild || dp.highlights || 'Đang cập nhật'}
+
+==================================================
+3. HƯỚNG DẪN SỬ DỤNG & BỐI CẢNH ỨNG DỤNG THỰC TẾ:
+${dp.applications || 'Đang cập nhật'}
+
+==================================================
+4. ĐIỂM VƯỢT TRỘI & LỢI THẾ CẠNH TRANH:
+${dp.highlights || 'Đang cập nhật'}
+`;
+  rootFolder.file('product_descriptions.txt', descText);
 
   const manifestData = {
     schemaVersion: '2.0.0',
@@ -174,7 +216,8 @@ export function generateTsvString(pipelineState) {
   const shops1688 = (pipelineState.valid1688Shops || []).map(s => s.detailUrl || s.offerUrl || (s.offerId || s.id ? `https://detail.1688.com/offer/${s.offerId || s.id}.html` : ''));
   while (shops1688.length < 5) shops1688.push('');
 
-  const shopsShopee = (pipelineState.shopeeShops || []).map(s => s.itemUrl || s.url || (s.itemId ? `https://shopee.ph/product/${s.shopId}/${s.itemId}` : ''));
+  const shopeeDomain = pipelineState.settings?.shopeeMarket === 'vn' ? 'shopee.vn' : 'shopee.ph';
+  const shopsShopee = (pipelineState.shopeeShops || []).map(s => s.itemUrl || s.url || (s.itemId ? `https://${shopeeDomain}/product/${s.shopId}/${s.itemId}` : ''));
   while (shopsShopee.length < 5) shopsShopee.push('');
 
   const topVideos = (pipelineState.formattedVideos || []).slice(0, 3).map(v => `${v.videoUrl || ''} (${v.label || v.likeCount + ' tym'})`);
@@ -188,9 +231,14 @@ export function generateTsvString(pipelineState) {
     .join('; ')
     .replace(/[\r\n\t]+/g, ' ');
 
+function cleanTsvValue(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).trim().replace(/[\r\n\t]+/g, ' ');
+}
+
   const row = [
     sku,
-    (enriched.suggestedMarketingTitle || '').replace(/[\r\n\t]+/g, ' '),
+    enriched.suggestedMarketingTitle || '',
     pricing.wholesaleCNY || 0,
     pricing.wholesaleVND || 0,
     pricing.retailPHP || 0,
@@ -213,7 +261,7 @@ export function generateTsvString(pipelineState) {
     topReviews[1],
     topReviews[2],
     specsStr
-  ];
+  ].map(cleanTsvValue);
 
   return headers.join('\t') + '\n' + row.join('\t');
 }

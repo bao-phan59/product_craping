@@ -46,7 +46,7 @@ export function setupHealthcheckModule({ suiteRunner }) {
       </div>
       <div style="font-size: 11px; color: #94a3b8;">Độ trễ: ${res.latencyMs}ms</div>
       <div style="font-size: 11px; color: #64748b;">${res.details ? JSON.stringify(res.details) : (res.error || 'N/A')}</div>
-      ${res.suggestion ? `<div style="font-size: 11px; color: #fbbf24;">💡 ${res.suggestion}</div>` : ''}
+      ${res.suggestion ? `<div style="font-size: 11px; color: #fbbf24;">${res.suggestion}</div>` : ''}
     `;
     grid.appendChild(card);
   }

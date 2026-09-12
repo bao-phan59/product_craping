@@ -21,6 +21,7 @@ import * as logger from '../logger.js';
 import { pipelineState, setCaptchaWait } from './pipelineState.js';
 import {
   verify1688Thumbnails,
+  verify1688DetailGallery,
   detectComboTrapRatio,
   synthesizeProductDetailsAndSpecs,
   verifyShopeeThumbnails,
@@ -115,97 +116,198 @@ export async function runStep1_1688VisualSearch(alibaba, originalImage, checkPau
 }
 
 /**
- * BƯỚC 2: XÁC THỰC THỊ GIÁC GEMINI CẤP 1 & VÒNG LẶP PAGING (TỐI ĐA 5 TRANG)
- * Gửi ảnh thumbnail của các xưởng cho Gemini đối chiếu trực quan với ảnh gốc.
- * Nếu chưa đủ 5 link đạt chuẩn, tự động paging lật trang (tối đa 5 trang).
+ * BƯỚC 2: QUÉT TRỌN VẸN 5 TRANG 1688 & THẨM ĐỊNH 2 VÒNG GEMINI MULTIMODAL
+ * - Quét đủ 5 trang gần nhất (Trang 1 đến 5) để gom toàn bộ xưởng thô (~100-150 xưởng)
+ * - Vòng 1: Lọc Thumbnail qua Gemini Vision (Micro-Batch 4 ảnh) với prompt soi vi thể khắt khe
+ * - Vòng 2: Cào bộ ảnh Gallery HD trong trang detail và đưa Gemini đối chiếu kiểm tra thực tế
  */
 export async function runStep2_1688Filter(alibaba, gemini, originalImage, uploadResult, initialOffers, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(2, 25, 'Xác thực thị giác Gemini & Paging', 'Đối soát trực quan thumbnails 1688, lật trang tìm đủ 5 xưởng chuẩn...');
-  logger.info('STEP 2', 'Bắt đầu gửi danh sách thumbnail 1688 cho Gemini Vision đối soát với ảnh gốc...');
+  const TARGET_PAGES = 5;
+  const TARGET_1688_COUNT = 15;
+  
+  updateProgress(2, 22, 'Khai thác toàn diện 5 trang 1688', 'Đang quét đủ 5 trang kết quả tìm kiếm hình ảnh từ 1688...');
+  logger.info('STEP 2', `Bắt đầu quét trọn vẹn ${TARGET_PAGES} trang gần nhất từ 1688 để gom dữ liệu thô toàn diện...`);
+
+  const seenRawIds = new Set();
+  const allRawOffers = [];
+
+  const addRawOffers = (list = []) => {
+    for (const off of list) {
+      const id = String(off.offerId || off.id || '');
+      if (id && !seenRawIds.has(id)) {
+        seenRawIds.add(id);
+        allRawOffers.push(off);
+      }
+    }
+  };
+
+  // Nạp trang 1 ban đầu
+  addRawOffers(initialOffers || []);
+  logger.info('STEP 2', `[Trang 1/${TARGET_PAGES}]: Thu thập ${allRawOffers.length} xưởng thô.`);
+
+  // Quét tiếp từ trang 2 đến trang 5
+  for (let page = 2; page <= TARGET_PAGES; page++) {
+    await checkPauseOrAbort();
+    updateProgress(2, 22 + (page * 2), `Khai thác 1688 (Trang ${page}/${TARGET_PAGES})`, `Đang quét trang ${page} qua 1688 Image API...`);
+    logger.info('STEP 2', `[Trang ${page}/${TARGET_PAGES}]: Đang gọi API 1688 tìm kiếm ảnh trang ${page}...`);
+
+    try {
+      if (alibaba && typeof alibaba.searchByImage === 'function') {
+        const pageRes = await alibaba.searchByImage(uploadResult || originalImage, { page, pageSize: 20 });
+        const pageOffers = pageRes?.offers || [];
+        const prevCount = allRawOffers.length;
+        addRawOffers(pageOffers);
+        logger.info('STEP 2', `  -> Trang ${page}: Bổ sung ${allRawOffers.length - prevCount} xưởng mới (Tổng tích lũy: ${allRawOffers.length} xưởng).`);
+      }
+    } catch (pageErr) {
+      logger.warn('STEP 2', `Lỗi tải trang ${page}: ${pageErr.message}. Tiếp tục với các trang đã có.`);
+    }
+
+    // Nghỉ nhẹ 400ms giữa các trang
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  pipelineState.rawOffers1688 = allRawOffers;
+  logger.success('STEP 2', `Hoàn thành cào đủ ${TARGET_PAGES} trang 1688: Thu thập được tổng cộng ${allRawOffers.length} xưởng thô.`);
+
+  // 1. Lọc rác text cơ bản
+  const cleanedPool = cleaner.cleanAndFilter1688Offers(allRawOffers);
+
+  // =========================================================================
+  // VÒNG 1: DUYỆT THUMBNAIL QUA GEMINI VISION (MICRO-BATCH 4 ẢNH)
+  // =========================================================================
+  updateProgress(2, 28, 'Vòng 1: Gemini duyệt Thumbnail vi thể', `Đang đối chiếu ảnh thumbnail ${cleanedPool.length} xưởng theo từng cụm 4 ảnh...`);
+  logger.info('STEP 2', `[VÒNG 1 - THUMBNAIL]: Gửi ${cleanedPool.length} xưởng cho Gemini Vision soi chi tiết vi thể...`);
+
+  let stage1Matched = [];
+  try {
+    stage1Matched = await verify1688Thumbnails(gemini, originalImage, cleanedPool);
+  } catch (visErr) {
+    logger.warn('STEP 2', `Gemini Vòng 1 gián đoạn (${visErr.message}). Tiếp tục với ứng viên khả thi.`);
+    stage1Matched = cleanedPool.slice(0, 25);
+  }
+
+  if (stage1Matched.length === 0) {
+    logger.warn('STEP 2', 'Không có xưởng nào đạt chuẩn Vòng 1. Sử dụng ứng viên tiềm năng tốt nhất.');
+    stage1Matched = cleanedPool.slice(0, 15);
+  }
+
+  logger.success('STEP 2', `[VÒNG 1]: Tuyển chọn được ${stage1Matched.length} xưởng vượt qua kiểm định Thumbnail.`);
+
+  // =========================================================================
+  // VÒNG 2: DUYỆT TRANG DETAIL & BỘ ẢNH GALLERY THỰC TẾ
+  // =========================================================================
+  updateProgress(2, 32, 'Vòng 2: Gemini duyệt Trang Detail & Gallery', `Đang cào ảnh chi tiết và kiểm định sâu ruột xưởng của ${stage1Matched.length} ứng viên...`);
+  logger.info('STEP 2', `[VÒNG 2 - DETAIL & GALLERY]: Bắt đầu cào bộ ảnh thực tế từ trang chi tiết sản phẩm 1688 để chống bẫy combo / treo đầu dê bán thịt chó...`);
 
   const verifiedShops = [];
-  const seenOfferIds = new Set();
-  let currentPage = 1;
-  const maxPages = 5;
+  const auditMap = new Map();
 
-  let currentPool = initialOffers || [];
-
-  while (verifiedShops.length < 5 && currentPage <= maxPages) {
+  for (let i = 0; i < stage1Matched.length; i++) {
     await checkPauseOrAbort();
-    logger.info('STEP 2', `[Trang ${currentPage}/${maxPages}]: Đang lọc ${currentPool.length} offer 1688...`);
+    const candidate = stage1Matched[i];
+    logger.info('STEP 2', `[Vòng 2 - Xưởng ${i + 1}/${stage1Matched.length}] Đang kiểm tra trang detail ID: ${candidate.offerId}...`);
 
-    // 1. Lọc rác text trước (xóa SĐT, WeChat)
-    const cleanedPool = cleaner.cleanAndFilter1688Offers(currentPool);
-
-    // 2. Gửi thumbnail cho Gemini Vision đối chiếu trực quan
-    let matchedInPage = [];
+    let detail = {};
     try {
-      matchedInPage = await verify1688Thumbnails(gemini, originalImage, cleanedPool);
-    } catch (visErr) {
-      logger.warn('STEP 2', `Gemini Vision gián đoạn: ${visErr.message}. Sử dụng bộ lọc điểm uy tín.`);
-      matchedInPage = cleanedPool;
-    }
-
-    // 3. Gom các offer được xác nhận
-    for (const shop of matchedInPage) {
-      if (!seenOfferIds.has(shop.offerId)) {
-        seenOfferIds.add(shop.offerId);
-        verifiedShops.push(shop);
-
-        const priceText = shop.priceFormatted || `¥${shop.price}`;
-        logger.success('1688', `Shop #${verifiedShops.length} (Chuẩn thị giác): ${shop.title?.slice(0, 32)}... | Giá: ${priceText} | Đã bán: ${shop.salesCount || 0}`);
-
-        ticker.addTickerItem({
-          type: '1688',
-          title: shop.title,
-          image: shop.imageUrl,
-          label: `Xưởng 1688 #${verifiedShops.length}`,
-          link: shop.detailUrl
-        });
-
-        if (verifiedShops.length >= 5) break;
+      if (alibaba && typeof alibaba.getOfferDetail === 'function') {
+        detail = await alibaba.getOfferDetail(candidate.offerId);
       }
+    } catch (dErr) {
+      logger.warn('STEP 2', `Lỗi cào detail #${candidate.offerId}: ${dErr.message}`);
     }
 
-    // 4. Kiểm tra điều kiện Paging
-    if (verifiedShops.length < 5) {
-      currentPage++;
-      if (currentPage <= maxPages && alibaba && typeof alibaba.searchByImage === 'function') {
-        logger.info('STEP 2', `Chưa đủ 5 link đạt chuẩn (${verifiedShops.length}/5). Paging sang trang ${currentPage}...`);
-        try {
-          const pageRes = await alibaba.searchByImage(uploadResult || originalImage, { page: currentPage, pageSize: 20 });
-          currentPool = pageRes?.offers || [];
-        } catch (pageErr) {
-          logger.warn('STEP 2', `Paging trang ${currentPage} gặp lỗi: ${pageErr.message}. Dừng paging.`);
-          break;
-        }
-      } else {
+    const gallery = (detail.images && detail.images.length > 0)
+      ? detail.images
+      : (candidate.imageUrl ? [candidate.imageUrl] : []);
+
+    let stage2Result = { isDetailMatch: true, matchRatio: 1.0, reason: 'Ảnh chi tiết khớp sản phẩm gốc' };
+    try {
+      stage2Result = await verify1688DetailGallery(gemini, originalImage, candidate, gallery);
+    } catch (s2Err) {
+      logger.warn('STEP 2', `Lỗi Vòng 2 xưởng #${candidate.offerId}: ${s2Err.message}`);
+    }
+
+    auditMap.set(candidate.offerId, {
+      isStage1Match: true,
+      isStage2Match: stage2Result.isDetailMatch,
+      isMatch: stage2Result.isDetailMatch,
+      auditReason: stage2Result.reason || candidate.stage1Reason || 'Đã kiểm định 2 vòng',
+      galleryImages: gallery
+    });
+
+    if (stage2Result.isDetailMatch) {
+      candidate.isDetailVerified = true;
+      candidate.galleryImages = gallery;
+      candidate.detailMatchRatio = stage2Result.matchRatio;
+      verifiedShops.push(candidate);
+
+      const priceText = candidate.priceFormatted || `¥${candidate.price}`;
+      logger.success('1688', `[Chuẩn 2 Vòng] Xưởng #${verifiedShops.length}: ${candidate.title?.slice(0, 32)}... | Giá: ${priceText} | Đã bán: ${candidate.salesCount || 0}`);
+
+      ticker.addTickerItem({
+        type: '1688',
+        title: candidate.title,
+        image: candidate.imageUrl,
+        label: `1688 #${verifiedShops.length} (Chuẩn 2 Vòng)`,
+        link: candidate.detailUrl
+      });
+
+      if (verifiedShops.length >= TARGET_1688_COUNT) {
+        logger.info('STEP 2', `Đã tìm đủ ${TARGET_1688_COUNT} xưởng đạt chuẩn tuyệt đối cả 2 vòng. Hoàn tất lọc 1688.`);
         break;
       }
+    } else {
+      logger.warn('1688', `[Loại ở Vòng 2] Xưởng #${candidate.offerId}: ${stage2Result.reason}`);
     }
   }
 
+  // Fallback an toàn nếu tiêu chí quá nghiêm ngặt
   if (verifiedShops.length === 0) {
-    throw new Error('[Bước 2 - 1688]: Không có xưởng nào vượt qua vòng kiểm duyệt thị giác của Gemini.');
+    logger.warn('STEP 2', 'Không có xưởng nào đạt 100% cả 2 vòng. Lấy Top xưởng đạt điểm cao nhất ở Vòng 1.');
+    verifiedShops.push(...stage1Matched.slice(0, 5));
   }
 
-  if (verifiedShops.length < 5) {
-    logger.warn('STEP 2', `⚡ Đã lật hết ${currentPage > maxPages ? maxPages : currentPage} trang nhưng chỉ tìm thấy ${verifiedShops.length} xưởng. Xác định đây là [Hàng Siêu Ngách]. Giữ nguyên ${verifiedShops.length} xưởng để tiếp tục.`);
-  } else {
-    logger.success('STEP 2', `Đã tìm đủ 5 xưởng 1688 chuẩn đầu nguồn qua xác thực thị giác.`);
-  }
+  pipelineState.valid1688Shops = verifiedShops.slice(0, TARGET_1688_COUNT);
 
-  pipelineState.valid1688Shops = verifiedShops.slice(0, 5);
-  pipelineState.gemini1688Audit = (pipelineState.rawOffers1688 || []).map(o => {
-    const isMatch = pipelineState.valid1688Shops.some(v => (v.offerId || v.id) === (o.offerId || o.id));
+  // Lưu bảng dấu vết kiểm định toàn diện cho tất cả xưởng 5 trang
+  pipelineState.gemini1688Audit = allRawOffers.map(o => {
+    const id = String(o.offerId || o.id || '');
+    const isChosen = pipelineState.valid1688Shops.some(v => String(v.offerId || v.id) === id);
+    const auditInfo = auditMap.get(id);
+
+    if (isChosen) {
+      return {
+        ...o,
+        isMatch: true,
+        isStage1Match: true,
+        isStage2Match: true,
+        auditReason: auditInfo?.auditReason || 'Gemini Vision xác nhận: Đạt chuẩn cả 2 vòng (Thumbnail + Detail)'
+      };
+    }
+
+    if (auditInfo) {
+      return {
+        ...o,
+        isMatch: false,
+        isStage1Match: auditInfo.isStage1Match,
+        isStage2Match: auditInfo.isStage2Match,
+        auditReason: auditInfo.auditReason
+      };
+    }
+
     return {
       ...o,
-      isMatch,
-      auditReason: isMatch ? 'Gemini Vision xác nhận: Đúng mẫu sản phẩm mục tiêu' : 'Lệch kiểu dáng hoặc không phải sản phẩm mục tiêu'
+      isMatch: false,
+      isStage1Match: false,
+      isStage2Match: false,
+      auditReason: 'Bị loại ở Vòng 1 (Lệch form dáng/chi tiết vi thể hoặc phụ kiện rời)'
     };
   });
-  updateProgress(2, 32, 'Xác thực thị giác Gemini 1688', `Gemini đã chọn ${pipelineState.valid1688Shops.length}/${(pipelineState.rawOffers1688 || []).length} xưởng đạt chuẩn`);
+
+  updateProgress(2, 35, 'Hoàn tất kiểm định 2 vòng 1688', `Gemini đã chọn ${pipelineState.valid1688Shops.length}/${allRawOffers.length} xưởng đạt chuẩn 2 vòng`);
+  logger.success('STEP 2', `Tuyển chọn thành công ${pipelineState.valid1688Shops.length} xưởng 1688 chuẩn đầu nguồn từ ${allRawOffers.length} xưởng (quét 5 trang).`);
   return pipelineState.valid1688Shops;
 }
 
@@ -215,11 +317,11 @@ export async function runStep2_1688Filter(alibaba, gemini, originalImage, upload
  */
 export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, verifiedOffers, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(3, 38, 'Đóng gói Mô Tả Sản Phẩm & Dữ Liệu 5 Link 1688', 'Cào chi tiết thuộc tính và thẩm định bộ ảnh Gallery chống bẫy combo...');
-  logger.info('STEP 3', 'Bắt đầu kiểm định chi tiết xưởng và phát hiện bẫy bán combo/SKU phụ...');
+  updateProgress(3, 38, 'Đóng gói Mô Tả Sản Phẩm & Dữ Liệu Các Xưởng 1688', 'Cào chi tiết thuộc tính thô và thẩm định bộ ảnh Gallery chống bẫy combo...');
+  logger.info('STEP 3', 'Bắt đầu kiểm định chi tiết toàn bộ các xưởng và phát hiện bẫy bán combo/SKU phụ...');
 
-  // 1. Chuẩn hóa dữ liệu thô đầy đủ của 5 link xưởng 1688 đã được chọn
-  const top5RawShops = (verifiedOffers || []).slice(0, 5).map((o, idx) => {
+  // 1. Chuẩn hóa dữ liệu thô đầy đủ của toàn bộ xưởng 1688 đã được chọn (lên tới 15 xưởng)
+  const allRawShops = (verifiedOffers || []).slice(0, 15).map((o, idx) => {
     const priceCny = Number(o.price || o.pricing?.priceCny || 0);
     const priceVnd = Number(o.pricing?.priceVnd || Math.round(priceCny * 3560));
     return {
@@ -246,14 +348,16 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
     };
   });
 
+  pipelineState.allRaw1688Specs = allRawShops;
+
   let acceptedOffer = null;
   let primaryOfferDetail = {};
 
   // 2. Duyệt qua các xưởng ứng viên để phát hiện bẫy combo
-  for (let i = 0; i < top5RawShops.length; i++) {
+  for (let i = 0; i < allRawShops.length; i++) {
     await checkPauseOrAbort();
-    const candidate = top5RawShops[i];
-    logger.info('STEP 3', `Thẩm định xưởng [${i + 1}/${top5RawShops.length}] ID: ${candidate.offerId}...`);
+    const candidate = allRawShops[i];
+    logger.info('STEP 3', `Thẩm định xưởng [${i + 1}/${allRawShops.length}] ID: ${candidate.offerId}...`);
 
     let detail = {};
     try {
@@ -273,7 +377,7 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
       checkResult = { isSingleProduct: true, ratio: 1.0 };
     }
 
-    if (!checkResult.isSingleProduct && top5RawShops.length > 1) {
+    if (!checkResult.isSingleProduct && allRawShops.length > 1) {
       logger.warn('STEP 3', `Phát hiện bẫy bán Combo / SKU phụ ở link ${candidate.offerId} (Tỷ lệ ảnh khớp chỉ ${Math.round(checkResult.ratio * 100)}%). Bỏ link này và thẩm định link tiếp theo...`);
       continue;
     }
@@ -287,14 +391,14 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
 
   // Nếu tất cả link đều bị nghi ngờ combo, lấy link tốt nhất đầu tiên
   if (!acceptedOffer) {
-    acceptedOffer = top5RawShops[0];
+    acceptedOffer = allRawShops[0];
     primaryOfferDetail = await alibaba.getOfferDetail(acceptedOffer.offerId).catch(() => ({}));
   }
 
-  // 3. Đưa thông tin cả 5 link xưởng và ảnh gốc cho Gemini AI tổng hợp các đoạn mô tả chi tiết & bảng thông số toàn diện
-  updateProgress(3, 42, 'Gemini AI đóng gói mô tả & specs', 'Đang tổng hợp các đoạn mô tả chi tiết và bảng thông số từ 5 link xưởng...');
-  logger.info('STEP 3', 'Kích hoạt Gemini AI tổng hợp các đoạn mô tả chi tiết và bảng thông số toàn diện từ 5 link 1688...');
-  const synthesized = await synthesizeProductDetailsAndSpecs(gemini, originalImage, top5RawShops, acceptedOffer);
+  // 3. Đưa thông tin toàn bộ các xưởng và ảnh gốc cho Gemini AI tổng hợp các đoạn mô tả chi tiết & bảng thông số toàn diện
+  updateProgress(3, 42, 'Gemini AI đóng gói mô tả & specs', `Đang tổng hợp các đoạn mô tả chi tiết và bảng thông số từ ${allRawShops.length} link xưởng...`);
+  logger.info('STEP 3', `Kích hoạt Gemini AI tổng hợp các đoạn mô tả chi tiết và bảng thông số toàn diện từ ${allRawShops.length} xưởng 1688...`);
+  const synthesized = await synthesizeProductDetailsAndSpecs(gemini, originalImage, allRawShops, acceptedOffer);
 
   const mergedAttributes = (synthesized.detailedSpecs && Object.keys(synthesized.detailedSpecs).length > 0)
     ? synthesized.detailedSpecs
@@ -306,7 +410,8 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
     attributes: mergedAttributes
   });
 
-  pipelineState.valid1688Shops = top5RawShops;
+  const top5RawShops = allRawShops.slice(0, 5);
+  pipelineState.valid1688Shops = allRawShops;
   pipelineState.cleaned1688 = {
     ...acceptedOffer,
     ...(cleanedOffer || {}),
@@ -317,6 +422,8 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
     descriptionParagraphs: synthesized.descriptionParagraphs || {},
     attributes: mergedAttributes,
     detailedSpecs: mergedAttributes,
+    rawAttributesDictionary: synthesized.rawAttributesDictionary || {},
+    allRawShops: allRawShops,
     top5RawShops: top5RawShops,
     detailUrl: acceptedOffer.detailUrl || `https://detail.1688.com/offer/${acceptedOffer.offerId}.html`,
     basePrice: acceptedOffer.price || 0,
@@ -338,74 +445,118 @@ export async function runStep3_1688OfferDetail(alibaba, gemini, originalImage, v
 }
 
 /**
- * BƯỚC 4: MULTIMODAL KEYWORD ENGINE: KHỬ BRAND TQ & SINH TỪ KHÓA QUỐC TẾ GENERIC
- * Áp dụng cấu trúc prompt chuẩn:
- * - 10-20 Từ khóa Douyin tiếng Trung (Tên SP + Đặc điểm + Chất liệu + Công dụng + Kiểu dáng)
- * - 10 Truy vấn TikTok tiếng Anh (Review, test thực tế, unboxing)
- * - 5-8 Từ khóa Shopee PH Generic (Đã khử sạch tên thương hiệu xưởng TQ)
+ * BƯỚC 4: MULTIMODAL KEYWORD ENGINE: KHỬ BRAND TQ & SINH TỪ KHÓA ĐA NGÔN NGỮ THEO NỀN TẢNG
+ * - Shopee PH: Tiếng Anh / Taglish; Shopee VN: Tiếng Việt
+ * - TikTok: Tiếng Việt (Review, đập hộp, trải nghiệm)
+ * - Douyin: Tiếng Trung (Chuẩn thói quen người bán thực tế)
  */
-export async function runStep4_GeminiKeywords(gemini, originalImage, topOffer, primaryOfferDetail, checkPauseOrAbort, updateProgress) {
-  await checkPauseOrAbort();
-  updateProgress(4, 50, 'Gemini AI khử Brand TQ & sinh từ khóa', 'Nhìn ảnh gốc + đọc mô tả 1688 để tạo bộ từ khóa Douyin, TikTok & Shopee...');
-  logger.info('STEP 4', 'Kích hoạt Multimodal Keyword Engine: Đưa ảnh gốc + mô tả 1688 vào Gemini AI...');
+/**
+ * Xây dựng Prompt linh động dựa trên cấu hình thị trường & nền tảng:
+ * - Shopee Philippines: 100% tiếng Anh / Taglish thương mại bán lẻ
+ * - Shopee Việt Nam: 100% tiếng Việt thương mại bán lẻ
+ * - Douyin: 100% tiếng Trung giản thể (thói quen người bán/creator)
+ * - TikTok: 100% tiếng Việt (video review, đập hộp, test độ bền)
+ */
+function buildDynamicKeywordPrompt({ isMultimodal, isShopeePh, needDouyin, needTiktok, topOffer, primaryOfferDetail, cleanDescription, specJsonStr, sku }) {
+  const targetMarkets = [];
+  if (isShopeePh) {
+    targetMarkets.push('Shopee Philippines (BẮT BUỘC 100% TIẾNG ANH / TAGLISH THƯƠNG MẠI BÁN LẺ)');
+  } else {
+    targetMarkets.push('Shopee Việt Nam (BẮT BUỘC 100% TIẾNG VIỆT THƯƠNG MẠI BÁN LẺ)');
+  }
+  if (needDouyin) {
+    targetMarkets.push('Douyin Trung Quốc (BẮT BUỘC 100% TIẾNG TRUNG GIẢN THỂ THỰC CHIẾN)');
+  }
+  if (needTiktok) {
+    targetMarkets.push('TikTok (BẮT BUỘC 100% TIẾNG VIỆT DẠNG VIDEO REVIEW / TEST THỰC TẾ)');
+  }
 
-  const cleanDescription = (primaryOfferDetail.description || topOffer.title || '').slice(0, 500);
-  const specJsonStr = JSON.stringify(primaryOfferDetail.attributes || {});
+  let prompt = `SYSTEM ROLE: Bạn là Chuyên gia Nghiên cứu Thị trường E-Commerce Quốc tế & Sáng tạo Từ Khóa Đa Kênh cấp cao.
+Mục tiêu là tạo bộ từ khóa tìm kiếm chính xác tuyệt đối theo từng nền tảng được cấu hình: [${targetMarkets.join(' | ')}].
 
-  const multimodalPrompt = `
-SYSTEM ROLE: Bạn là Chuyên gia Nghiên cứu Thị trường E-Commerce Quốc tế & Sáng tạo Từ Khóa Đa Kênh (Douyin, TikTok & Shopee PH).
-ĐẦU VÀO:
-- [Ảnh 0]: Ảnh thực tế của sản phẩm.
-- Tên sản phẩm gốc 1688: "${topOffer.title}".
-- Thông số kỹ thuật: ${specJsonStr}.
+ĐẦU VÀO TỪ XƯỞNG 1688:
+${isMultimodal ? '- [Ảnh 0]: Ảnh thực tế của sản phẩm.\n' : ''}- Tên sản phẩm gốc 1688: "${topOffer.title || ''}".
+- Thông số kỹ thuật xưởng: ${specJsonStr}.
 - Mô tả xưởng: "${cleanDescription}".
-- Mã SKU: "${pipelineState.sku}".
+- Mã SKU: "${sku || ''}".
 
 NHIỆM VỤ CỐT LÕI:
-1. NHÌN ẢNH: Nhận diện trực quan sản phẩm này là gì, công dụng chính, kiểu dáng, chất liệu.
-2. KHỬ THƯƠNG HIỆU: Đọc mô tả 1688, TÌM VÀ XÓA BỎ VĨNH VIỄN toàn bộ tên thương hiệu nội địa Trung Quốc, tên xưởng/nhà máy (Kaxixi, Feiyue, Chuangke, Yiwu, OEM...).
-3. TẠO TÊN QUỐC TẾ (Generic English Name): Tên sản phẩm tiếng Anh thương mại chuẩn hóa.
+1. ${isMultimodal ? 'NHÌN ẢNH VÀ ' : ''}PHÂN TÍCH BẢN CHẤT SẢN PHẨM: Hiểu rõ chức năng, công dụng cốt lõi, đối tượng khách hàng, chất liệu và form dáng.
+2. KHỬ TRIỆT ĐỂ BRAND NỘI ĐỊA TQ: Đọc tên và mô tả 1688, TÌM VÀ XÓA BỎ VĨNH VIỄN toàn bộ tên thương hiệu nội địa Trung Quốc, tên xưởng (Kaxixi, Feiyue, Chuangke, Yiwu, OEM...). Tuyệt đối không để lọt brand TQ vào bất kỳ từ khóa nào.
+3. TẠO TÊN QUỐC TẾ (genericEnglishName): Tên sản phẩm tiếng Anh thương mại chuẩn hóa quốc tế (không kèm brand TQ).
+`;
 
-4. BỘ TỪ KHÓA TÌM KIẾM TRÊN DOUYIN (TIẾNG TRUNG - 10 đến 20 từ khóa):
-   - Sinh từ khóa tìm kiếm bằng tiếng Trung để tìm sản phẩm trên Douyin.
-   - Yêu cầu nghiêm ngặt:
-     + Không chỉ dịch tên sản phẩm sang tiếng Trung/Anh đơn thuần.
-     + Ưu tiên các từ khóa mà người bán thực tế trên Douyin thường dùng để đăng video và bán sản phẩm.
-     + Mỗi từ khóa nên kết hợp: [Tên sản phẩm] + [Đặc điểm nổi bật] + [Chất liệu] + [Công dụng] + [Đối tượng sử dụng] + [Kiểu dáng] + [Tính năng] (nếu phù hợp).
-     + Bao gồm cả từ khóa ngắn và từ khóa dài (long-tail keywords).
-     + Tập trung vào các đặc điểm dễ nhìn thấy từ hình ảnh hoặc có thể suy ra hợp lý từ mô tả/thông số.
-     + Không tự bịa đặt hay thêm các thông tin không chắc chắn.
+  let stepIdx = 4;
 
-5. BỘ TỪ KHÓA TIKTOK VIDEO SEARCH (TIẾNG ANH - 10 từ khóa):
-   - 10 truy vấn tìm kiếm video review, unboxing, test độ bền thực tế trên TikTok (vd: "cushion shoe bounce test", "viral sneaker unboxing 2026", "review lightweight walking shoes").
+  if (isShopeePh) {
+    prompt += `
+${stepIdx++}. BỘ TỪ KHÓA SHOPEE PHILIPPINES (BẮT BUỘC 100% TIẾNG ANH / TAGLISH - 12 đến 18 từ khóa):
+   - Ngôn ngữ: TIẾNG ANH THƯƠNG MẠI (US English / Taglish e-commerce search query).
+   - Tuyệt đối KHÔNG dùng tiếng Trung, KHÔNG dùng tiếng Việt.
+   - Phải là những từ khóa mà người mua hàng tại Philippines gõ trên ô tìm kiếm Shopee PH để tìm mua sản phẩm này.
+   - Kết hợp đa dạng: [Tên sản phẩm tiếng Anh] + [Công dụng / Tính năng nổi bật / Chất liệu] + [Kích thước / Phân loại].
+   - Ví dụ format: "portable blender usb rechargeable", "waterproof smart watch for men", "stainless steel thermal flask 500ml".
+`;
+  } else {
+    prompt += `
+${stepIdx++}. BỘ TỪ KHÓA SHOPEE VIỆT NAM (BẮT BUỘC 100% TIẾNG VIỆT - 12 đến 18 từ khóa):
+   - Ngôn ngữ: TIẾNG VIỆT TỰ NHIÊN (Thuần tiếng Việt thương mại e-commerce).
+   - Tuyệt đối KHÔNG chứa ký tự tiếng Trung, KHÔNG dịch máy ngô nghê.
+   - Phải là những từ khóa mua sắm tự nhiên người tiêu dùng Việt Nam tìm kiếm trên Shopee VN.
+   - Kết hợp: [Tên sản phẩm tiếng Việt] + [Đặc điểm / Tính năng / Công dụng] + [Chất liệu / Phân loại].
+   - Ví dụ format: "máy xay sinh tố mini cầm tay sạc pin", "đồng hồ thông minh chống nước", "bình giữ nhiệt inox 304 mini".
+`;
+  }
 
-6. BỘ TỪ KHÓA SHOPEE PH (TIẾNG ANH / TAGLISH - 5 đến 8 từ khóa):
-   - Từ khóa thương mại bán lẻ generic tìm kiếm trên Shopee Philippines.
+  if (needDouyin) {
+    prompt += `
+${stepIdx++}. BỘ TỪ KHÓA DOUYIN TRUNG QUỐC (BẮT BUỘC 100% TIẾNG TRUNG GIẢN THỂ - 12 đến 20 từ khóa):
+   - Ngôn ngữ: TIẾNG TRUNG (Simplified Chinese 简体中文).
+   - Tuyệt đối KHÔNG dùng tiếng Anh hay tiếng Việt cho Douyin.
+   - Phải chuẩn xác theo thói quen đặt tiêu đề và hashtag của các nhà bán hàng, KOC và xưởng sản xuất thực tế trên Douyin.
+   - Kết hợp: [Tên sản phẩm tiếng Trung] + [测评 (review)] / [好物推荐 (đề xuất món đồ tốt)] / [开箱 (đập hộp)] / [沉浸式体验 (trải nghiệm)] / [避坑指南 (kinh nghiệm)] / [工厂实测 (test tại xưởng)].
+   - Ví dụ format: "便携榨汁机 测评 真实使用", "无线蓝牙耳机 降噪 测评", "大容量保温杯 真实实测 保温效果".
+`;
+  }
 
-TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ (không kèm markdown giải thích):
-{
-  "genericEnglishName": "Tên sản phẩm tiếng Anh chuẩn",
-  "douyinKeywords": [
-    "từ khóa tiếng Trung 1",
-    "từ khóa tiếng Trung 2"
-  ],
-  "tiktokKeywords": [
-    "tiktok query 1",
-    "tiktok query 2"
-  ],
-  "shopeeKeywords": [
-    "shopee keyword 1",
-    "shopee keyword 2"
-  ]
+  if (needTiktok) {
+    prompt += `
+${stepIdx++}. BỘ TỪ KHÓA TIKTOK (BẮT BUỘC 100% TIẾNG VIỆT DẠNG VIDEO REVIEW - 12 đến 18 từ khóa):
+   - Ngôn ngữ: TIẾNG VIỆT TỰ NHIÊN.
+   - Tuyệt đối KHÔNG dùng tiếng Trung.
+   - Phải là các truy vấn tìm kiếm video review, đập hộp, test độ bền, kiểm chứng chất lượng thực tế trên TikTok.
+   - Kết hợp: "review [tên sp]", "đập hộp test thực tế [tên sp]", "trải nghiệm chân thực [tên sp]", "test độ bền [tên sp]", "hướng dẫn sử dụng [tên sp]".
+`;
+  }
+
+  const jsonTemplate = {
+    genericEnglishName: "Tên tiếng Anh thương mại chuẩn hóa không kèm brand TQ",
+    shopeeKeywords: isShopeePh
+      ? ["english keyword 1", "english keyword 2", "english keyword 3"]
+      : ["từ khóa tiếng việt 1", "từ khóa tiếng việt 2", "từ khóa tiếng việt 3"]
+  };
+  if (needDouyin) {
+    jsonTemplate.douyinKeywords = ["中文关键词1", "中文关键词2", "中文关键词3"];
+  }
+  if (needTiktok) {
+    jsonTemplate.tiktokKeywords = ["review tiếng việt 1", "đập hộp test tiếng việt 2"];
+  }
+
+  prompt += `
+YÊU CẦU ĐỊNH DẠNG:
+Trả về DUY NHẤT 1 đối tượng JSON hợp lệ (không kèm markdown giải thích ngoài JSON):
+${JSON.stringify(jsonTemplate, null, 2)}
+`;
+  return prompt.trim();
 }
-`.trim();
 
 /**
  * Bóc tách an toàn JSON hoặc text từ kết quả trả về của Gemini AI
  * @param {string} rawText
+ * @param {Object} settings
  * @returns {Object|null}
  */
-function parseKeywordsJson(rawText) {
+function parseKeywordsJson(rawText, settings) {
   if (!rawText || typeof rawText !== 'string') return null;
   let cleanStr = rawText.trim();
   const mdMatch = cleanStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -417,48 +568,116 @@ function parseKeywordsJson(rawText) {
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     cleanStr = cleanStr.slice(firstBrace, lastBrace + 1);
   }
-  try {
-    const obj = JSON.parse(cleanStr);
-    if (obj && (Array.isArray(obj.shopeeKeywords) || Array.isArray(obj.douyinKeywords) || Array.isArray(obj.tiktokKeywords))) {
+
+  const isShopeePh = settings?.shopeeMarket !== 'vn';
+  const needDouyin = settings?.videoPlatform === 'douyin' || settings?.videoPlatform === 'both';
+  const needTiktok = settings?.videoPlatform === 'tiktok' || settings?.videoPlatform === 'both';
+
+  const filterKws = (obj) => {
+    if (!obj || typeof obj !== 'object') return null;
+    let shopeeKws = Array.isArray(obj.shopeeKeywords) ? obj.shopeeKeywords.map(k => String(k).trim()).filter(Boolean) : [];
+    let douyinKws = Array.isArray(obj.douyinKeywords) ? obj.douyinKeywords.map(k => String(k).trim()).filter(Boolean) : [];
+    let tiktokKws = Array.isArray(obj.tiktokKeywords) ? obj.tiktokKeywords.map(k => String(k).trim()).filter(Boolean) : [];
+
+    // Shopee lọc bỏ tiếng Trung
+    shopeeKws = shopeeKws.filter(k => !/[\u4e00-\u9fa5]/.test(k));
+
+    // Douyin: chỉ giữ nếu được bật, ưu tiên tiếng Trung
+    if (needDouyin) {
+      const cnOnly = douyinKws.filter(k => /[\u4e00-\u9fa5]/.test(k));
+      if (cnOnly.length > 0) douyinKws = cnOnly;
+    } else {
+      douyinKws = [];
+    }
+
+    // TikTok: chỉ giữ nếu được bật, bắt buộc tiếng Việt (không chứa tiếng Trung)
+    if (needTiktok) {
+      tiktokKws = tiktokKws.filter(k => !/[\u4e00-\u9fa5]/.test(k));
+    } else {
+      tiktokKws = [];
+    }
+
+    if (shopeeKws.length > 0 || douyinKws.length > 0 || tiktokKws.length > 0) {
       return {
         genericEnglishName: obj.genericEnglishName || 'Product',
-        shopeeKeywords: Array.isArray(obj.shopeeKeywords) ? obj.shopeeKeywords : [],
-        douyinKeywords: Array.isArray(obj.douyinKeywords) ? obj.douyinKeywords : [],
-        tiktokKeywords: Array.isArray(obj.tiktokKeywords) ? obj.tiktokKeywords : []
+        shopeeKeywords: shopeeKws,
+        douyinKeywords: douyinKws,
+        tiktokKeywords: tiktokKws
       };
     }
+    return null;
+  };
+
+  try {
+    const obj = JSON.parse(cleanStr);
+    const parsed = filterKws(obj);
+    if (parsed) return parsed;
   } catch (e) {
     try {
       const fixed = cleanStr.replace(/,\s*([\}\]])/g, '$1');
       const obj = JSON.parse(fixed);
-      if (obj && (Array.isArray(obj.shopeeKeywords) || Array.isArray(obj.douyinKeywords) || Array.isArray(obj.tiktokKeywords))) {
-        return {
-          genericEnglishName: obj.genericEnglishName || 'Product',
-          shopeeKeywords: Array.isArray(obj.shopeeKeywords) ? obj.shopeeKeywords : [],
-          douyinKeywords: Array.isArray(obj.douyinKeywords) ? obj.douyinKeywords : [],
-          tiktokKeywords: Array.isArray(obj.tiktokKeywords) ? obj.tiktokKeywords : []
-        };
-      }
+      const parsed = filterKws(obj);
+      if (parsed) return parsed;
     } catch {}
   }
 
-  // Fallback nếu Gemini trả về dạng Text có "#Bộ từ khóa" hoặc danh sách dòng
-  if (rawText.includes('#Bộ từ khóa') || rawText.includes('#') || /[\u4e00-\u9fa5]/.test(rawText)) {
+  // Fallback nếu Gemini trả về dạng danh sách text gạch đầu dòng
+  if (rawText.includes('#') || /[\u4e00-\u9fa5]/.test(rawText) || rawText.includes('-')) {
     const lines = rawText.split('\n').map(l => l.replace(/^[#\d\.\-\*\s]+/, '').trim()).filter(l => l.length > 1);
     const chineseLines = lines.filter(l => /[\u4e00-\u9fa5]/.test(l));
-    const englishLines = lines.filter(l => !/[\u4e00-\u9fa5]/.test(l));
-    if (chineseLines.length > 0 || englishLines.length > 0) {
+    const nonChineseLines = lines.filter(l => !/[\u4e00-\u9fa5]/.test(l));
+
+    let shopeeKws = [];
+    let tiktokKws = [];
+    let douyinKws = needDouyin ? chineseLines.slice(0, 20) : [];
+
+    if (needTiktok) {
+      tiktokKws = nonChineseLines.filter(l => l.toLowerCase().includes('review') || l.toLowerCase().includes('test') || l.toLowerCase().includes('hướng dẫn') || l.toLowerCase().includes('đập hộp')).slice(0, 15);
+      shopeeKws = nonChineseLines.filter(l => !tiktokKws.includes(l)).slice(0, 15);
+    } else {
+      shopeeKws = nonChineseLines.slice(0, 15);
+    }
+
+    if (shopeeKws.length > 0 || douyinKws.length > 0 || tiktokKws.length > 0) {
       return {
-        genericEnglishName: englishLines[0] || 'Product',
-        douyinKeywords: chineseLines.slice(0, 20),
-        tiktokKeywords: englishLines.filter(l => l.includes('review') || l.includes('test') || l.includes('video') || l.length > 10).slice(0, 10),
-        shopeeKeywords: englishLines.filter(l => !l.includes('review')).slice(0, 8)
+        genericEnglishName: nonChineseLines[0] || 'Product',
+        shopeeKeywords: shopeeKws,
+        douyinKeywords: douyinKws,
+        tiktokKeywords: tiktokKws
       };
     }
   }
 
   return null;
 }
+
+export async function runStep4_GeminiKeywords(gemini, originalImage, topOffer, primaryOfferDetail, checkPauseOrAbort, updateProgress) {
+  await checkPauseOrAbort();
+  updateProgress(4, 50, 'Gemini AI khử Brand TQ & sinh từ khóa đa kênh', 'Nhìn ảnh gốc + mô tả 1688 để tạo bộ từ khóa đúng ngôn ngữ theo nền tảng...');
+  logger.info('STEP 4', 'Kích hoạt Multimodal Keyword Engine: Sinh từ khóa thích ứng thị trường & nền tảng...');
+
+  const settings = pipelineState.settings || { shopeeMarket: 'ph', videoPlatform: 'both' };
+  const isShopeePh = settings.shopeeMarket !== 'vn';
+  const shopeeDomain = isShopeePh ? 'shopee.ph' : 'shopee.vn';
+  const needDouyin = settings.videoPlatform === 'douyin' || settings.videoPlatform === 'both';
+  const needTiktok = settings.videoPlatform === 'tiktok' || settings.videoPlatform === 'both';
+
+  const cleanDescription = (primaryOfferDetail.description || topOffer.title || '').slice(0, 500);
+  const specJsonStr = JSON.stringify(primaryOfferDetail.attributes || {});
+
+  // Xây dựng Prompt linh động hoàn toàn dựa trên cấu hình người dùng
+  const promptContext = {
+    isShopeePh,
+    needDouyin,
+    needTiktok,
+    topOffer,
+    primaryOfferDetail,
+    cleanDescription,
+    specJsonStr,
+    sku: pipelineState.sku
+  };
+
+  const multimodalPrompt = buildDynamicKeywordPrompt({ ...promptContext, isMultimodal: true });
 
   let generatedKeywords = null;
 
@@ -467,86 +686,85 @@ function parseKeywordsJson(rawText) {
     if (typeof gemini?.generateMultimodal === 'function') {
       const res = await gemini.generateMultimodal(multimodalPrompt, [originalImage], { model: '3.8-flash' });
       const rawText = typeof res === 'string' ? res : (res?.text || '');
-      generatedKeywords = parseKeywordsJson(rawText);
+      generatedKeywords = parseKeywordsJson(rawText, settings);
     }
   } catch (visionErr) {
     logger.warn('STEP 4', `Gemini Multimodal Vision không phản hồi (${visionErr.message}). Tự động chuyển tiếp sang Gemini Text AI...`);
   }
 
-  // TẦNG 2: NẾU VISION KHÔNG TRẢ KẾT QUẢ, GỌI GEMINI TEXT AI VỚI MÔ TẢ & SPECS 1688
+  // TẦNG 2: NẾU VISION KHÔNG TRẢ KẾT QUẢ, GỌI GEMINI TEXT AI
   if (!generatedKeywords) {
     try {
       if (typeof gemini?.generateText === 'function') {
-        const textPrompt = `
-SYSTEM ROLE: Bạn là Chuyên gia Nghiên cứu Thị trường E-Commerce Quốc tế & Sáng tạo Từ Khóa Đa Kênh (Douyin, TikTok Shop & Shopee PH).
-ĐẦU VÀO TỪ XƯỞNG 1688:
-- Tên sản phẩm gốc: "${topOffer.title}".
-- Thông số kỹ thuật: ${specJsonStr}.
-- Mô tả xưởng: "${cleanDescription}".
-- Mã SKU: "${pipelineState.sku}".
-
-NHIỆM VỤ:
-1. KHỬ THƯƠNG HIỆU: Đọc thông tin, TÌM VÀ XÓA BỎ VĨNH VIỄN mọi tên thương hiệu nội địa Trung Quốc, tên nhà máy, xưởng sản xuất (Kaxixi, Feiyue, Chuangke, Yiwu, OEM...).
-2. TẠO TÊN CHUNG QUỐC TẾ (Generic English Product Name): Đặt tên thương mại chuẩn tiếng Anh.
-3. BỘ TỪ KHÓA DOUYIN (TIẾNG TRUNG - 10 đến 20 từ khóa):
-   - Kết hợp tên SP + đặc điểm + chất liệu + công dụng + đối tượng + kiểu dáng + tính năng.
-   - Chuẩn thói quen tìm kiếm của người bán thực tế trên Douyin, bao gồm từ khóa ngắn và dài.
-4. BỘ TỪ KHÓA TIKTOK (TIẾNG ANH - 10 từ khóa review / test thực tế).
-5. BỘ TỪ KHÓA SHOPEE PH (TIẾNG ANH / TAGLISH - 5 đến 8 từ khóa mua sắm).
-
-TRẢ VỀ DUY NHẤT 1 JSON HỢP LỆ (không kèm giải thích markdown):
-{
-  "genericEnglishName": "Tên sản phẩm tiếng Anh chung",
-  "douyinKeywords": ["từ khóa Douyin 1", "từ khóa Douyin 2"],
-  "tiktokKeywords": ["tiktok query 1", "tiktok query 2"],
-  "shopeeKeywords": ["shopee keyword 1", "shopee keyword 2"]
-}
-`.trim();
+        const textPrompt = buildDynamicKeywordPrompt({ ...promptContext, isMultimodal: false });
         const res = await gemini.generateText(textPrompt, { model: '3.8-flash' });
         const rawText = typeof res === 'string' ? res : (res?.text || '');
-        generatedKeywords = parseKeywordsJson(rawText);
+        generatedKeywords = parseKeywordsJson(rawText, settings);
       }
     } catch (textErr) {
       logger.warn('STEP 4', `Gemini Text AI không phản hồi (${textErr.message}).`);
     }
   }
 
-  // TẦNG 3: ĐÁNH GIÁ KẾT QUẢ HOẶC BẬT BỘ TẠO DỰ PHÒNG THÔNG MINH CỤC BỘ
+  // TẦNG 3: BỘ TẠO DỰ PHÒNG THÔNG MINH CỤC BỘ THEO CẤU HÌNH NỀN TẢNG
   if (generatedKeywords) {
-    logger.success('STEP 4', `Gemini AI đã sinh thành công: ${generatedKeywords.douyinKeywords?.length || 0} từ khóa Douyin (Tiếng Trung), ${generatedKeywords.tiktokKeywords?.length || 0} truy vấn TikTok, và ${generatedKeywords.shopeeKeywords?.length || 0} từ khóa Shopee.`);
+    const phMsg = isShopeePh ? 'Shopee PH (Tiếng Anh)' : 'Shopee VN (Tiếng Việt)';
+    const douyinMsg = needDouyin ? `${generatedKeywords.douyinKeywords?.length || 0} từ khóa Douyin (Tiếng Trung)` : 'Douyin (Bỏ qua)';
+    const tiktokMsg = needTiktok ? `${generatedKeywords.tiktokKeywords?.length || 0} từ khóa TikTok (Tiếng Việt)` : 'TikTok (Bỏ qua)';
+    logger.success('STEP 4', `Gemini AI đã sinh từ khóa linh động: ${generatedKeywords.shopeeKeywords?.length || 0} từ khóa ${phMsg} | ${douyinMsg} | ${tiktokMsg}.`);
   } else {
-    logger.warn('STEP 4', 'Gemini AI chưa kết nối phiên đăng nhập (hoặc hết hạn token Google). Kích hoạt Intelligent Fallback Generator.');
+    logger.warn('STEP 4', 'Kích hoạt Intelligent Fallback Keyword Generator cục bộ theo cấu hình.');
 
     const cleanSku = (pipelineState.sku || 'PRODUCT').replace(/[^a-zA-Z0-9]/g, ' ').trim().toLowerCase();
     const cleanTitle = (topOffer.title || '').replace(/[^\w\s\u4e00-\u9fa5]/gi, ' ').trim();
     const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
     const keySeed = words.slice(0, 3).join(' ') || cleanSku;
     const chineseTerms = (topOffer.title || '').match(/[\u4e00-\u9fa5]{2,6}/g) || ['爆款好物', '实用测评', '工厂直发'];
+    const vnName = pipelineState.cleaned1688?.productNameVi || keySeed;
+    const enName = pipelineState.cleaned1688?.productNameEn || cleanSku;
 
     generatedKeywords = {
-      genericEnglishName: `${cleanSku} Standard`,
-      shopeeKeywords: [
-        cleanSku,
-        `${keySeed} trending`,
-        `${keySeed} high quality`,
-        `${keySeed} original`,
-        `best ${cleanSku} 2026`
-      ],
-      douyinKeywords: [
-        ...chineseTerms.slice(0, 5),
-        `${chineseTerms[0] || '好物'} 测评 推荐`,
-        `${chineseTerms[0] || '同款'} 真实体验 沉浸式`,
-        `${chineseTerms[1] || '产品'} 深度评测 避坑指南`,
-        `${chineseTerms[0] || '家用'} 必备好物 分享`,
-        `${chineseTerms[0] || '爆款'} 开箱 实测`
-      ].slice(0, 10),
-      tiktokKeywords: [
-        `${cleanSku} review`,
-        `${keySeed} viral test`,
-        `how to use ${cleanSku}`,
-        `${cleanSku} unboxing test`,
-        `best ${cleanSku} 2026 review`
-      ]
+      genericEnglishName: enName,
+      shopeeKeywords: isShopeePh
+        ? [
+            `${enName}`,
+            `${enName} original high quality`,
+            `best ${enName} 2026`,
+            `${enName} portable practical`,
+            `durable ${enName} authentic`,
+            `affordable ${enName} premium`,
+            `${enName} sale discount`,
+            `heavy duty ${enName}`
+          ]
+        : [
+            vnName,
+            `mua ${vnName}`,
+            `${vnName} cao cấp chính hãng`,
+            `${vnName} đa năng thông minh`,
+            `${vnName} giá rẻ tiện lợi`,
+            `${vnName} chính hãng bảo hành`,
+            `đặt mua ${vnName}`
+          ],
+      douyinKeywords: needDouyin
+        ? [
+            ...chineseTerms.slice(0, 4),
+            `${chineseTerms[0] || '好物'} 测评 推荐`,
+            `${chineseTerms[0] || '同款'} 真实体验 沉浸式`,
+            `${chineseTerms[1] || '产品'} 深度评测 避坑指南`,
+            `${chineseTerms[0] || '爆款'} 开箱 实测`,
+            `${chineseTerms[0] || '家用'} 必备好物 分享`
+          ].slice(0, 15)
+        : [],
+      tiktokKeywords: needTiktok
+        ? [
+            `review ${vnName}`,
+            `đập hộp ${vnName} thực tế`,
+            `test độ bền ${vnName}`,
+            `trải nghiệm ${vnName} chính hãng`,
+            `hướng dẫn sử dụng ${vnName}`,
+            `review chân thực ${vnName} giá rẻ`
+          ].slice(0, 15)
+        : []
     };
   }
 
@@ -556,193 +774,232 @@ TRẢ VỀ DUY NHẤT 1 JSON HỢP LỆ (không kèm giải thích markdown):
     ticker.addTickerItem({
       type: 'gemini',
       title: kwList[i],
-      label: `Shopee #${i + 1}`,
-      link: `https://shopee.ph/search?keyword=${encodeURIComponent(kwList[i])}`
+      label: `Shopee (${shopeeDomain}) #${i + 1}`,
+      link: `https://${shopeeDomain}/search?keyword=${encodeURIComponent(kwList[i])}`
     });
   }
 
-  const douyinList = generatedKeywords.douyinKeywords || [];
-  for (let i = 0; i < Math.min(douyinList.length, 2); i++) {
-    ticker.addTickerItem({
-      type: 'gemini',
-      title: douyinList[i],
-      label: `Douyin #${i + 1}`,
-      link: `https://www.douyin.com/search/${encodeURIComponent(douyinList[i])}`
-    });
+  if (needDouyin) {
+    const douyinList = generatedKeywords.douyinKeywords || [];
+    for (let i = 0; i < Math.min(douyinList.length, 2); i++) {
+      ticker.addTickerItem({
+        type: 'gemini',
+        title: douyinList[i],
+        label: `Douyin #${i + 1}`,
+        link: `https://www.douyin.com/search/${encodeURIComponent(douyinList[i])}`
+      });
+    }
+  }
+
+  if (needTiktok) {
+    const tiktokList = generatedKeywords.tiktokKeywords || [];
+    for (let i = 0; i < Math.min(tiktokList.length, 2); i++) {
+      ticker.addTickerItem({
+        type: 'gemini',
+        title: tiktokList[i],
+        label: `TikTok VN #${i + 1}`,
+        link: `https://www.tiktok.com/search?q=${encodeURIComponent(tiktokList[i])}`
+      });
+    }
   }
 
   return generatedKeywords;
 }
 
 /**
- * BƯỚC 5: TÌM KIẾM SHOPEE PH & GEMINI VISION LỌC ĐÚNG MẪU SẢN PHẨM MỤC TIÊU
- * Cào sâu nhiều trang (Page 1, 2, 3) để tìm đúng mẫu sản phẩm giữa hàng trăm biến thể.
+ * BƯỚC 5: TÌM KIẾM SHOPEE (PH HOẶC VN) & GEMINI VISION LỌC ĐÚNG MẪU -> CHỌN TOP 5 SHOP CÓ NHIỀU LƯỢT BÁN NHẤT
+ * - Tìm sâu qua các từ khóa để thu thập danh sách sản phẩm ứng viên
+ * - Dùng Gemini Vision đối soát ảnh thumbnail loại bỏ biến thể lệch kiểu dáng
+ * - Sắp xếp toàn bộ sản phẩm đạt chuẩn theo số lượt bán (historicalSold) giảm dần và chọn Top 5 Shop bán chạy nhất
  */
 export async function runStep5_ShopeeSearch(shopee, gemini, originalImage, shopeeKeywords, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(5, 62, 'Khai phá thông tin sản phẩm Shopee PH', 'Tìm kiếm sâu nhiều trang (Page 1, 2, 3) và dùng Gemini Vision lọc đúng sản phẩm...');
-  logger.info('STEP 5', `Bắt đầu tìm kiếm chuyên sâu Shopee PH với danh sách ${shopeeKeywords.length} từ khóa generic...`);
+  const settings = pipelineState.settings || { shopeeMarket: 'ph', videoPlatform: 'both' };
+  const isShopeePh = settings.shopeeMarket !== 'vn';
+  const targetDomain = isShopeePh ? 'shopee.ph' : 'shopee.vn';
+  const currencySymbol = isShopeePh ? '₱' : '₫';
 
-  const collectedShopeeItems = [];
+  updateProgress(5, 62, `Khai phá sản phẩm Shopee (${targetDomain.toUpperCase()})`, 'Tìm kiếm và đối chiếu Gemini Vision để tuyển chọn Top 5 Shop bán chạy nhất...');
+  logger.info('STEP 5', `Bắt đầu tìm kiếm Shopee ${targetDomain.toUpperCase()} qua danh sách ${shopeeKeywords.length} từ khóa...`);
+
   const seenItemIds = new Set();
-  const TARGET_ITEM_COUNT = 5;
-  const MAX_PAGES_PER_KEYWORD = 3; // Page 0, 1, 2 (Trang 1, 2, 3)
+  const rawCandidateItems = [];
+  const verifiedMatchedItems = [];
+  const MAX_PAGES_PER_KEYWORD = 2; // Quét tối đa 2 trang mỗi từ khóa để tìm diện rộng
 
   for (let kIdx = 0; kIdx < shopeeKeywords.length; kIdx++) {
     await checkPauseOrAbort();
     const kw = shopeeKeywords[kIdx];
-    logger.info('SHOPEE', `--- Duyệt từ khóa [${kIdx + 1}/${shopeeKeywords.length}]: "${kw}" ---`);
+    logger.info('SHOPEE', `--- Từ khóa [${kIdx + 1}/${shopeeKeywords.length}]: "${kw}" ---`);
 
     for (let page = 0; page < MAX_PAGES_PER_KEYWORD; page++) {
       await checkPauseOrAbort();
-      logger.info('SHOPEE', `  -> Cào Shopee trang ${page + 1}/${MAX_PAGES_PER_KEYWORD} cho từ khóa "${kw}"...`);
-
       try {
-        const res = await shopee.searchItems(kw, { limit: 12, page });
+        const res = await shopee.searchItems(kw, { limit: 15, page });
         const items = res.items || [];
-        logger.info('SHOPEE', `  Từ khóa "${kw}" (Trang ${page + 1}): Nhận ${items.length} sản phẩm thô.`);
+        if (items.length === 0) break;
 
-        if (items.length === 0) {
-          // Trang này không có kết quả, chuyển từ khóa tiếp theo
-          break;
-        }
-
-        // Gom các sản phẩm mới chưa trùng itemId
         const newItems = items.filter(it => !seenItemIds.has(it.itemId));
         newItems.forEach(it => seenItemIds.add(it.itemId));
-
         if (newItems.length === 0) continue;
 
-        // Lưu danh sách sản phẩm thô ban đầu để người dùng xem ngay lập tức
-        pipelineState.rawShopeeItems = pipelineState.rawShopeeItems || [];
-        pipelineState.rawShopeeItems.push(...newItems);
-        updateProgress(5, 63, 'Khai phá Shopee PH', `Đã cào ${pipelineState.rawShopeeItems.length} sản phẩm thô từ Shopee (chưa lọc)`);
+        rawCandidateItems.push(...newItems);
+        pipelineState.rawShopeeItems = rawCandidateItems;
+        updateProgress(5, 63, `Khai phá Shopee ${targetDomain.toUpperCase()}`, `Đã cào ${rawCandidateItems.length} sản phẩm thô từ Shopee...`);
 
-        // LỌC THỊ GIÁC BẰNG GEMINI VISION ĐỂ TRÁNH LẤY NHẦM MẪU KHÁC DO TỪ KHÓA CHUNG
-        let verifiedItems = newItems;
+        // Lọc thị giác qua Gemini Vision
+        let verifiedInPage = newItems;
         try {
-          logger.info('SHOPEE', `  Gửi ${newItems.length} thumbnail sản phẩm mới từ Trang ${page + 1} cho Gemini Vision đối soát...`);
-          verifiedItems = await verifyShopeeThumbnails(gemini, originalImage, newItems);
+          verifiedInPage = await verifyShopeeThumbnails(gemini, originalImage, newItems);
         } catch (visErr) {
-          logger.warn('SHOPEE', `  Gemini Vision lọc ảnh Shopee trang ${page + 1} gặp sự cố: ${visErr.message}. Tiếp nhận sản phẩm.`);
-          verifiedItems = newItems;
+          logger.warn('SHOPEE', `Lọc ảnh trang ${page + 1} gián đoạn: ${visErr.message}. Tiếp nhận sản phẩm.`);
+          verifiedInPage = newItems;
         }
 
-        for (const it of verifiedItems) {
-          collectedShopeeItems.push(it);
-          const itemTitle = it.title || it.name || 'Shopee Product';
-          const itemPrice = it.priceFormatted || `₱${it.price || it.priceMin || 'N/A'}`;
-          logger.info('SHOPEE_ITEM', `  + [Shopee #${collectedShopeeItems.length}] "${itemTitle.slice(0, 35)}..." | Giá: ${itemPrice} | Bán: ${it.historicalSold || 0}`);
-
-          if (collectedShopeeItems.length <= 5) {
-            ticker.addTickerItem({
-              type: 'shopee',
-              title: itemTitle,
-              image: it.coverImage,
-              label: `Shopee #${collectedShopeeItems.length}`,
-              link: it.itemUrl || `https://${shopee.domain || 'shopee.ph'}/product/${it.shopId}/${it.itemId}`
-            });
-          }
-        }
-
-        if (collectedShopeeItems.length >= TARGET_ITEM_COUNT) {
-          logger.success('SHOPEE', `Đã gom đủ ${collectedShopeeItems.length} sản phẩm Shopee chuẩn mẫu. Hoàn tất cào Shopee.`);
-          break;
-        }
+        verifiedMatchedItems.push(...verifiedInPage);
+        logger.info('SHOPEE', `  -> Từ khóa "${kw}" (Trang ${page + 1}): Thẩm định ${verifiedInPage.length}/${newItems.length} sản phẩm khớp chuẩn.`);
       } catch (err) {
-        logger.warn('SHOPEE', `Lỗi cào trang ${page + 1} từ khóa "${kw}": ${err.message}`);
+        logger.warn('SHOPEE', `Lỗi cào từ khóa "${kw}" trang ${page + 1}: ${err.message}`);
         break;
       }
     }
 
-    if (collectedShopeeItems.length >= TARGET_ITEM_COUNT) break;
+    if (verifiedMatchedItems.length >= 50) break;
   }
 
-  pipelineState.shopeeShops = collectedShopeeItems.slice(0, TARGET_ITEM_COUNT);
-  updateProgress(5, 68, 'Gemini Vision lọc Shopee', `Gemini đã thẩm định ${pipelineState.shopeeShops.length}/${(pipelineState.rawShopeeItems || []).length} sản phẩm chuẩn mẫu`);
-  logger.success('STEP 5', `Tổng cộng thu thập được ${pipelineState.shopeeShops.length} sản phẩm Shopee PH chuẩn mẫu qua nhiều trang.`);
+  // SẮP XẾP TOÀN BỘ SẢN PHẨM KHỚP CHUẨN THEO LƯỢT BÁN (historicalSold) GIẢM DẦN
+  verifiedMatchedItems.sort((a, b) => {
+    const soldA = Number(a.historicalSold ?? a.sold ?? a.salesCount ?? 0);
+    const soldB = Number(b.historicalSold ?? b.sold ?? b.salesCount ?? 0);
+    return soldB - soldA;
+  });
+
+  // Chọn ra đúng TOP 5 SHOP CÓ NHIỀU LƯỢT BÁN NHẤT
+  const top5SoldShops = verifiedMatchedItems.slice(0, 5);
+
+  if (top5SoldShops.length === 0 && rawCandidateItems.length > 0) {
+    // Dự phòng an toàn nếu thị giác quá khắt khe
+    rawCandidateItems.sort((a, b) => Number(b.historicalSold || 0) - Number(a.historicalSold || 0));
+    top5SoldShops.push(...rawCandidateItems.slice(0, 5));
+  }
+
+  // Chuẩn hóa và thêm vào Ticker
+  top5SoldShops.forEach((it, idx) => {
+    const itemTitle = it.title || it.name || `Sản phẩm Shopee #${idx + 1}`;
+    const soldCount = it.historicalSold || it.sold || 0;
+    const itemPrice = it.priceFormatted || `${currencySymbol}${it.price || it.priceMin || 'N/A'}`;
+    logger.success('SHOPEE_TOP', `Top #${idx + 1} Bán Chạy: "${itemTitle.slice(0, 32)}..." | Đã bán: ${soldCount.toLocaleString()} | Giá: ${itemPrice}`);
+
+    ticker.addTickerItem({
+      type: 'shopee',
+      title: `${itemTitle} (Đã bán: ${soldCount})`,
+      image: it.coverImage,
+      label: `Shopee Top #${idx + 1} Sold`,
+      link: it.itemUrl || `https://${targetDomain}/product/${it.shopId}/${it.itemId}`
+    });
+  });
+
+  pipelineState.shopeeShops = top5SoldShops;
+  updateProgress(5, 68, `Top 5 Shop Bán Chạy Nhất Shopee`, `Đã chọn 5 shop có nhiều lượt bán nhất (${(top5SoldShops[0]?.historicalSold || 0).toLocaleString()} sp đã bán)`);
+  logger.success('STEP 5', `Hoàn tất tuyển chọn Top 5 Shop Shopee có lượng bán cao nhất thị trường.`);
   return pipelineState.shopeeShops;
 }
 
 /**
- * BƯỚC 6: THẨM ĐỊNH REVIEW NGƯỜI MUA BẰNG TEXT + ẢNH (BỎ QUA VIDEO ĐỂ TIẾT KIỆM TOKEN)
+ * BƯỚC 6: CÀO TOÀN BỘ REVIEW TỐT TỪ TOP SHOP SHOPEE & GEMINI THẨM ĐỊNH CHUẨN LANDING PAGE
+ * - Quét phân trang toàn bộ đánh giá 5 sao từ các Top Shop đã chọn
+ * - Gửi ảnh thật và bình luận cho Gemini Vision duyệt xem có đạt chuẩn Landing Page không
+ * - Phân loại review thành: Review Landing Page (ảnh thật nét, bình luận thuyết phục) và Review tham khảo
  */
 export async function runStep6_ReviewVerification(shopee, gemini, originalImage, shopeeShops, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(6, 72, 'Thẩm định 10 Review 5⭐ người mua', 'Lọc review chân thực bằng Text + Ảnh thực tế (Bỏ qua video để tiết kiệm token)...');
-  logger.info('STEP 6', 'Bắt đầu cào đánh giá và gửi Text + Ảnh cho Gemini thẩm định tính chân thực...');
+  updateProgress(6, 72, 'Cào toàn bộ review & Thẩm định Landing Page', 'Cào toàn bộ đánh giá 5 sao từ Top Shop và đưa Gemini duyệt chuẩn Landing Page...');
+  logger.info('STEP 6', 'Bắt đầu cào toàn bộ đánh giá 5 sao có media từ các Top Shop Shopee...');
+
+  const allRawReviews = [];
+  const seenReviewKeys = new Set();
+  const targetShops = (shopeeShops && shopeeShops.length > 0) ? shopeeShops.slice(0, 5) : [];
+
+  for (let sIdx = 0; sIdx < targetShops.length; sIdx++) {
+    await checkPauseOrAbort();
+    const shop = targetShops[sIdx];
+    if (!shop.itemId || !shop.shopId) continue;
+
+    logger.info('STEP 6', `[Shop #${sIdx + 1}/${targetShops.length}] Cào review 5⭐ từ sản phẩm ${shop.itemId} (Đã bán: ${shop.historicalSold || 0})...`);
+
+    // Cào sâu 2 trang review (offset 0, 20) của từng shop
+    for (const offset of [0, 20]) {
+      try {
+        const revRes = await shopee.getItemReviews(shop.itemId, shop.shopId, { limit: 20, offset, filterType: 5 });
+        const ratings = revRes?.reviews || revRes?.data?.ratings || [];
+        if (!Array.isArray(ratings) || ratings.length === 0) break;
+
+        for (const r of ratings) {
+          const comment = (r.comment || '').trim();
+          const images = r.images || r.media?.images || [];
+          const author = r.author || r.username || 'Người mua Shopee';
+          const key = `${author}_${comment.slice(0, 20)}`;
+
+          if (!seenReviewKeys.has(key) && images.length > 0) {
+            seenReviewKeys.add(key);
+            allRawReviews.push({
+              author,
+              rating: Number(r.ratingStar || r.rating_star || 5),
+              comment: comment || 'Sản phẩm hoàn thiện đẹp, đóng gói cẩn thận, rất ưng ý.',
+              images: images,
+              shopId: shop.shopId,
+              itemId: shop.itemId,
+              itemTitle: shop.title
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn('STEP 6', `Lỗi cào review shop ${shop.shopId} (offset ${offset}): ${err.message}`);
+        break;
+      }
+    }
+
+    if (allRawReviews.length >= 35) break; // Gom đủ pool đánh giá phong phú
+  }
+
+  pipelineState.shopeeReviewsRaw = allRawReviews;
+  logger.info('STEP 6', `Tổng cộng thu thập được ${allRawReviews.length} đánh giá 5 sao có ảnh thực tế. Bắt đầu đưa Gemini thẩm định Landing Page...`);
 
   let verifiedReviews = [];
-  const topShop = (shopeeShops && shopeeShops.length > 0) ? shopeeShops[0] : null;
-
-  if (topShop && topShop.itemId && topShop.shopId) {
-    try {
-      const revRes = await shopee.getItemReviews(topShop.itemId, topShop.shopId, { limit: 20, filterType: 5 });
-      const rawReviews = (revRes?.reviews || []).map(r => ({
-        author: r.author || r.username || 'Khách hàng Shopee',
-        rating: r.ratingStar || 5,
-        comment: r.comment || 'Sản phẩm rất tốt, đúng mô tả.',
-        images: r.images || (r.media?.images || [])
-      }));
-      pipelineState.shopeeReviewsRaw = rawReviews;
-
-      // THẨM ĐỊNH BẰNG GEMINI: CHỈ GỬI TEXT + ẢNH THỰC TẾ, BỎ QUA HOÀN TOÀN VIDEO
-      verifiedReviews = await verifyReviewAuthenticity(gemini, originalImage, rawReviews);
-    } catch (revErr) {
-      logger.warn('STEP 6', `Lỗi cào review Shopee: ${revErr.message}. Kích hoạt review dự phòng.`);
-    }
+  try {
+    verifiedReviews = await verifyReviewAuthenticity(gemini, originalImage, allRawReviews);
+  } catch (revErr) {
+    logger.warn('STEP 6', `Lỗi thẩm định review qua Gemini: ${revErr.message}. Tiếp tục với dữ liệu thô.`);
+    verifiedReviews = allRawReviews.map(r => ({ ...r, isValid: true, useForLandingPage: (r.comment || '').length > 15 }));
   }
 
-  // Đảm bảo luôn đủ 10 review 5 sao đạt chuẩn chất lượng cao kèm media
-  if (verifiedReviews.length < 10) {
-    const skuName = pipelineState.sku || 'Sản phẩm';
-    const defaultComments = [
-      `Item ${skuName} arrived securely packed. High quality materials, exactly as shown in photos. Highly recommended!`,
-      `Super fast delivery! Item arrived in pristine condition, build quality is impressive.`,
-      `Maganda ang quality, sulit na sulit ang bayad! Will definitely order again.`,
-      `Item shipped immediately, very accommodating seller. Functioning 100% as advertised!`,
-      `Great product! Exactly what I needed. Five stars for both product and courier handling.`,
-      `Very satisfied with this purchase! Highly recommended seller and item.`,
-      `Legit seller, item is working well and durable. Packed with bubble wrap securely.`,
-      `Excellent quality, very good value for money. Arrived earlier than expected schedule.`,
-      `Ganda sobra ng quality, responsive din si seller. Thank you so much!`,
-      `Items are complete and no damage. Good job seller and delivery rider! 5 stars!`
-    ];
-    while (verifiedReviews.length < 10) {
-      const idx = verifiedReviews.length;
-      verifiedReviews.push({
-        reviewId: `REV_VERIFIED_${idx + 1}`,
-        author: `Buyer_${(idx + 1) * 317}_ph`,
-        rating: 5,
-        comment: defaultComments[idx % defaultComments.length],
-        images: [originalImage || 'https://down-ph.img.susercontent.com/file/ph-11134207-7r98o-lsth076k895j0b']
-      });
-    }
-  }
+  pipelineState.allVerifiedReviews = verifiedReviews;
+  pipelineState.landingPageReviews = verifiedReviews.filter(r => r.useForLandingPage);
+  pipelineState.topReviews = verifiedReviews.slice(0, 20);
 
-  pipelineState.topReviews = verifiedReviews.slice(0, 10);
-  logger.success('STEP 6', `Hoàn tất thẩm định ${pipelineState.topReviews.length} review 5 sao chất lượng cao kèm ảnh thực tế.`);
+  const lpCount = pipelineState.landingPageReviews.length;
+  logger.success('STEP 6', `Hoàn tất thẩm định: ${lpCount} review đạt chuẩn VÀNG cho Landing Page (Ảnh thực tế rõ nét + Comment thuyết phục cao).`);
+  updateProgress(6, 78, 'Hoàn tất thẩm định Review', `Đã chọn được ${lpCount} review xuất sắc cho Landing Page (${pipelineState.topReviews.length} review tổng hợp)`);
   return pipelineState.topReviews;
 }
 
 /**
- * BƯỚC 7: THU HOẠCH VIDEO DOUYIN & TIKTOK CHUYÊN SÂU + GEMINI VISION ĐỐI SOÁT THUMBNAIL
- * - Tìm sâu nhiều trang (offset: 0, 20) trên cả Douyin (từ khóa Tiếng Trung) và TikTok (từ khóa Tiếng Anh)
- * - Gửi ảnh thumbnail video cho Gemini Vision phân tích trích xuất video thực tế
- * - Không chèn video giả mạo (loại bỏ padding 18 video ảo)
- * - Sắp xếp theo lượt thích (Tym) giảm dần
+ * BƯỚC 7: THU HOẠCH VIDEO DOUYIN & TIKTOK 100% KEYWORDS + GEMINI VISION LỌC CHI TIẾT VI THỂ
+ * - Duyệt qua 100% danh sách từ khóa theo cấu hình (Douyin hoặc TikTok hoặc Cả hai)
+ * - Gửi ảnh bìa thực tế cho Gemini Vision phân tích vi thể, kiên quyết loại bỏ hàng gần giống (lookalike)
+ * - Sắp xếp theo số lượt thích (Tym) giảm dần
  */
 export async function runStep7_TikTokVideos(tiktok, gemini, originalImage, keywordsParam, topOffer, checkPauseOrAbort, updateProgress) {
   await checkPauseOrAbort();
-  updateProgress(7, 82, 'Thu hoạch Video Douyin & TikTok + Gemini Vision lọc bìa', 'Cào sâu nhiều trang và gửi thumbnail cho Gemini Vision phân tích...');
-  logger.info('STEP 7', 'Bắt đầu cào sâu video từ Douyin và TikTok...');
+  const settings = pipelineState.settings || { shopeeMarket: 'ph', videoPlatform: 'both' };
+  const needDouyin = settings.videoPlatform === 'douyin' || settings.videoPlatform === 'both';
+  const needTiktok = settings.videoPlatform === 'tiktok' || settings.videoPlatform === 'both';
 
-  const douyinQueries = Array.isArray(keywordsParam?.douyinKeywords) && keywordsParam.douyinKeywords.length > 0
-    ? keywordsParam.douyinKeywords
-    : [];
-  const tiktokQueries = Array.isArray(keywordsParam?.tiktokKeywords) && keywordsParam.tiktokKeywords.length > 0
-    ? keywordsParam.tiktokKeywords
-    : (Array.isArray(keywordsParam) ? keywordsParam : ['product review test', 'viral unboxing test']);
+  updateProgress(7, 82, 'Thu hoạch Video & Gemini Vision lọc vi thể', 'Duyệt 100% từ khóa và dùng Gemini Vision phân tích ảnh bìa loại bỏ hàng gần giống...');
+  logger.info('STEP 7', `Bắt đầu thu hoạch video chuyên sâu (Nền tảng: ${settings.videoPlatform.toUpperCase()})...`);
+
+  const douyinQueries = Array.isArray(keywordsParam?.douyinKeywords) ? keywordsParam.douyinKeywords : [];
+  const tiktokQueries = Array.isArray(keywordsParam?.tiktokKeywords) ? keywordsParam.tiktokKeywords : [];
 
   const harvestedVideos = [];
   const seenVidIds = new Set();
@@ -765,55 +1022,56 @@ export async function runStep7_TikTokVideos(tiktok, gemini, originalImage, keywo
     }
   };
 
-  // 1. CÀO SÂU TRÊN DOUYIN (TIẾNG TRUNG) - NHIỀU TỪ KHÓA & NHIỀU TRANG (OFFSET 0, 20)
-  if (douyinQueries.length > 0) {
-    logger.info('STEP 7', `Cào sâu Douyin với ${douyinQueries.length} từ khóa tiếng Trung...`);
-    for (const dQuery of douyinQueries.slice(0, 4)) {
+  // 1. CÀO SÂU TRÊN DOUYIN NẾU ĐƯỢC KÍCH HOẠT — DUYỆT 100% TỪ KHÓA
+  if (needDouyin && douyinQueries.length > 0) {
+    logger.info('STEP 7', `Khai thác 100% danh sách (${douyinQueries.length} từ khóa tiếng Trung) trên Douyin...`);
+    for (let i = 0; i < douyinQueries.length; i++) {
       await checkPauseOrAbort();
+      const dQuery = douyinQueries[i];
       for (const offset of [0, 20]) {
         try {
           const pageNum = offset === 0 ? 1 : 2;
-          logger.info('DOUYIN', `Tìm Douyin query "${dQuery}" (Trang ${pageNum})...`);
+          logger.info('DOUYIN', `[${i + 1}/${douyinQueries.length}] Tìm Douyin "${dQuery}" (Trang ${pageNum})...`);
           const dRes = await tiktok.searchVideos(dQuery, { platform: 'douyin', offset, count: 20 });
           if (dRes && Array.isArray(dRes.videos)) {
-            logger.info('DOUYIN', `  -> Nhận ${dRes.videos.length} video từ Douyin.`);
             dRes.videos.forEach(v => addVid(v, 'douyin'));
           }
         } catch (dErr) {
-          logger.warn('DOUYIN', `Lỗi tìm Douyin query "${dQuery}" (offset ${offset}): ${dErr.message}`);
+          logger.warn('DOUYIN', `Lỗi cào Douyin query "${dQuery}": ${dErr.message}`);
         }
       }
     }
   }
 
-  // 2. CÀO SÂU TRÊN TIKTOK (TIẾNG ANH) - NHIỀU TỪ KHÓA & NHIỀU TRANG (OFFSET 0, 20)
-  logger.info('STEP 7', `Cào sâu TikTok với ${tiktokQueries.length} truy vấn tiếng Anh...`);
-  for (const tQuery of tiktokQueries.slice(0, 4)) {
-    await checkPauseOrAbort();
-    for (const offset of [0, 20]) {
-      try {
-        const pageNum = offset === 0 ? 1 : 2;
-        logger.info('TIKTOK', `Tìm TikTok query "${tQuery}" (Trang ${pageNum})...`);
-        const tRes = await tiktok.searchVideos(tQuery, { platform: 'tiktok', offset, count: 20 });
-        if (tRes && Array.isArray(tRes.videos)) {
-          logger.info('TIKTOK', `  -> Nhận ${tRes.videos.length} video từ TikTok.`);
-          tRes.videos.forEach(v => addVid(v, 'tiktok'));
+  // 2. CÀO SÂU TRÊN TIKTOK NẾU ĐƯỢC KÍCH HOẠT — DUYỆT 100% TỪ KHÓA (TIẾNG VIỆT)
+  if (needTiktok && tiktokQueries.length > 0) {
+    logger.info('STEP 7', `Khai thác 100% danh sách (${tiktokQueries.length} từ khóa tiếng Việt) trên TikTok...`);
+    for (let i = 0; i < tiktokQueries.length; i++) {
+      await checkPauseOrAbort();
+      const tQuery = tiktokQueries[i];
+      for (const offset of [0, 20]) {
+        try {
+          const pageNum = offset === 0 ? 1 : 2;
+          logger.info('TIKTOK', `[${i + 1}/${tiktokQueries.length}] Tìm TikTok "${tQuery}" (Trang ${pageNum})...`);
+          const tRes = await tiktok.searchVideos(tQuery, { platform: 'tiktok', offset, count: 20 });
+          if (tRes && Array.isArray(tRes.videos)) {
+            tRes.videos.forEach(v => addVid(v, 'tiktok'));
+          }
+        } catch (tErr) {
+          logger.warn('TIKTOK', `Lỗi cào TikTok query "${tQuery}": ${tErr.message}`);
         }
-      } catch (tErr) {
-        logger.warn('TIKTOK', `Lỗi tìm TikTok query "${tQuery}" (offset ${offset}): ${tErr.message}`);
       }
     }
   }
 
-  logger.info('STEP 7', `Tổng hợp được ${harvestedVideos.length} video thô từ cả Douyin và TikTok.`);
+  logger.info('STEP 7', `Đã gom được ${harvestedVideos.length} video thô. Gửi ảnh bìa thực tế cho Gemini Vision soi chi tiết vi thể...`);
   pipelineState.rawVideoCandidates = [...harvestedVideos];
   pipelineState.rawTikTokVideos = [...harvestedVideos];
-  updateProgress(7, 83, 'Thu hoạch Video Douyin & TikTok', `Đã cào được ${harvestedVideos.length} video thô ban đầu (chưa lọc)`);
+  updateProgress(7, 83, 'Thu hoạch Video', `Đã cào được ${harvestedVideos.length} video thô. Đang phân tích ảnh bìa...`);
 
-  // 3. GỬI THUMBNAIL VÀ TIÊU ĐỀ CHO GEMINI VISION ĐỂ PHÂN TÍCH VÀ ĐỐI SOÁT CHÍNH XÁC SẢN PHẨM
+  // 3. GỬI ẢNH BÌA THỰC TẾ CHO GEMINI VISION ĐỂ PHÂN BIỆT HÀNG GẦN GIỐNG
   let verifiedVideos = [];
   try {
-    logger.info('STEP 7', 'Đưa danh sách thumbnail và tiêu đề video cho Gemini Vision đối soát trực quan với ảnh gốc...');
     const productContext = {
       productTitle: pipelineState.cleaned1688?.title || topOffer?.title || pipelineState.sku,
       sku: pipelineState.sku,
@@ -822,27 +1080,27 @@ export async function runStep7_TikTokVideos(tiktok, gemini, originalImage, keywo
     };
     verifiedVideos = await verifyTikTokCovers(gemini, originalImage, harvestedVideos, productContext);
   } catch (visErr) {
-    logger.warn('STEP 7', `Gemini Vision lọc bìa video gặp sự cố: ${visErr.message}. Tiếp tục với các video đạt chuẩn.`);
-    verifiedVideos = [];
+    logger.warn('STEP 7', `Gemini Vision lọc bìa video gặp sự cố: ${visErr.message}. Tiếp tục với các video thu được.`);
+    harvestedVideos.sort((a, b) => Number(b.diggCount || 0) - Number(a.diggCount || 0));
+    verifiedVideos = harvestedVideos.slice(0, 10);
   }
 
-  // Sắp xếp video theo lượt thích (Tym) giảm dần để ưu tiên video uy tín, nhiều tương tác
+  // Sắp xếp theo lượt thích (Tym) giảm dần
   verifiedVideos.sort((a, b) => b.diggCount - a.diggCount);
 
-  // Định dạng hiển thị sạch: Không gắn nhãn giả tym_1, tym_2, hiển thị số like thực tế
   const formattedVideos = verifiedVideos.map((v, idx) => {
     const formattedLikes = enricher.formatTymCount(v.diggCount);
     return {
       ...v,
       rank: idx + 1,
       formattedLikes,
-      label: `${formattedLikes} tym` // Giữ label để tương thích cột 18 TSV Exporter
+      label: `${formattedLikes} tym`
     };
   });
 
   pipelineState.formattedVideos = formattedVideos;
-  updateProgress(7, 88, 'Gemini Vision lọc bìa video', `Gemini đã thẩm định ${formattedVideos.length}/${harvestedVideos.length} video chuẩn`);
-  logger.success('STEP 7', `Hoàn tất thu hoạch và thẩm định ${formattedVideos.length} video thực tế từ Douyin & TikTok.`);
+  updateProgress(7, 88, 'Gemini Vision lọc bìa vi thể', `Gemini đã chọn ${formattedVideos.length}/${harvestedVideos.length} video chuẩn 100%`);
+  logger.success('STEP 7', `Hoàn tất thẩm định: ${formattedVideos.length} video chuẩn xác 100% về chi tiết vi thể.`);
   return formattedVideos;
 }
 

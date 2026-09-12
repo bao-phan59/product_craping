@@ -100,7 +100,7 @@ export function setupGeminiModule({ gemini }) {
       aiBubbleContent.textContent = answer;
       chatMessages.scrollTop = chatMessages.scrollHeight;
     } catch (err) {
-      aiBubbleContent.textContent = `❌ Lỗi Gemini AI: ${err.message}. Hãy mở 1 tab gemini.google.com và đăng nhập tài khoản Google.`;
+      aiBubbleContent.textContent = `Lỗi Gemini AI: ${err.message}. Hãy mở 1 tab gemini.google.com và đăng nhập tài khoản Google.`;
     } finally {
       btnSend.disabled = false;
     }
@@ -110,7 +110,9 @@ export function setupGeminiModule({ gemini }) {
     const row = document.createElement('div');
     row.className = `msg-bubble msg-${role}`;
     if (role === 'ai') {
-      row.innerHTML = `<div class="msg-author">🤖 Gemini (${selectModel.value})</div><div class="msg-content">${text}</div>`;
+      const safeModel = escapeHtml(selectModel.value);
+      const safeText = escapeHtml(text);
+      row.innerHTML = `<div class="msg-author">Gemini (${safeModel})</div><div class="msg-content">${safeText}</div>`;
       chatMessages.appendChild(row);
       chatMessages.scrollTop = chatMessages.scrollHeight;
       return row.querySelector('.msg-content');
@@ -197,9 +199,19 @@ export function setupGeminiModule({ gemini }) {
       bananaResults.innerHTML = '';
       cardsToAppend.forEach(card => bananaResults.appendChild(card));
     } catch (err) {
-      bananaResults.innerHTML = `<div class="empty-state" style="color: #f87171;">Lỗi Banana: ${err.message}</div>`;
+      bananaResults.innerHTML = `<div class="empty-state" style="color: #f87171;">Lỗi Banana: ${escapeHtml(err.message)}</div>`;
     } finally {
       btnBanana.disabled = false;
     }
   });
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

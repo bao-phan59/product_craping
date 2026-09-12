@@ -31,6 +31,9 @@ export function log(level = 'INFO', tag = 'SYS', message = '') {
   
   const textLine = `[${timeStr}] [${level}] [${tag}] ${message}`;
   logHistory.push(textLine);
+  if (logHistory.length > 500) {
+    logHistory.shift();
+  }
 
   if (logOutputElement) {
     const row = document.createElement('div');
@@ -49,14 +52,17 @@ export function log(level = 'INFO', tag = 'SYS', message = '') {
     `;
 
     logOutputElement.appendChild(row);
+    while (logOutputElement.childNodes.length > 500) {
+      logOutputElement.removeChild(logOutputElement.firstChild);
+    }
 
     if (autoScroll) {
       logOutputElement.scrollTop = logOutputElement.scrollHeight;
     }
   }
 
-  // Ghi đồng thời ra console chuẩn của devtools
-  const cMethod = level === 'ERROR' ? console.error : (level === 'WARN' ? console.warn : console.log);
+  // Ghi đồng thời ra console chuẩn của devtools (dùng console.log cho WARN để không kích hoạt cờ lỗi của chrome://extensions)
+  const cMethod = level === 'ERROR' ? console.error : console.log;
   cMethod(`[${level}] [${tag}] ${message}`);
 }
 

@@ -54,8 +54,8 @@ export function setupTiktokModule({ tiktok }) {
       resultsList.innerHTML = `
         <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-            <span style="color: #38bdf8; font-weight: 700; font-size: 13px;">🐞 Báo Cáo Kiểm Tra Hệ Thống ${platform.toUpperCase()} API</span>
-            <button class="btn-copy-tiktok-debug" style="background: #0369a1; border: 1px solid #38bdf8; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">📋 Sao chép báo cáo debug</button>
+            <span style="color: #38bdf8; font-weight: 700; font-size: 13px;">Báo Cáo Kiểm Tra Hệ Thống ${platform.toUpperCase()} API</span>
+            <button class="btn-copy-tiktok-debug" style="background: #0369a1; border: 1px solid #38bdf8; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">Sao chép báo cáo debug</button>
           </div>
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
             Nền tảng: <strong style="color: #38bdf8;">${platform.toUpperCase()}</strong> | 
@@ -67,8 +67,8 @@ export function setupTiktokModule({ tiktok }) {
 
       resultsList.querySelector('.btn-copy-tiktok-debug')?.addEventListener('click', (e) => {
         navigator.clipboard.writeText(reportJson);
-        e.target.textContent = '✅ Đã sao chép!';
-        setTimeout(() => { e.target.textContent = '📋 Sao chép báo cáo debug'; }, 2000);
+        e.target.textContent = 'Đã sao chép!';
+        setTimeout(() => { e.target.textContent = 'Sao chép báo cáo debug'; }, 2000);
       });
 
       statusText.textContent = `Đã hoàn thành kiểm tra ${platform.toUpperCase()} API!`;
@@ -90,7 +90,7 @@ export function setupTiktokModule({ tiktok }) {
     // Tự động kiểm tra và đảm bảo tab đã tải xong hoàn toàn để kích hoạt In-Tab Bypass
     let tab = await tiktok.getActiveTab(platform);
     if (!tab) {
-      statusText.textContent = `🟡 Đang tự động mở tab ${platform.toUpperCase()} để nạp bảo mật...`;
+      statusText.textContent = `Đang tự động mở tab ${platform.toUpperCase()} để nạp bảo mật...`;
       tab = await tiktok.ensureActiveTab(platform, (msg) => {
         statusText.textContent = msg;
       });
@@ -116,9 +116,9 @@ export function setupTiktokModule({ tiktok }) {
           <div style="padding: 16px; color: #94a3b8;">
             <p>Không tìm thấy video nào phù hợp trên ${platform.toUpperCase()} (0 video).</p>
             <details style="margin-top: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 10px;">
-              <summary style="color: #38bdf8; font-size: 12px; cursor: pointer; font-weight: 600;">🔍 Xem phản hồi thô từ ${platform.toUpperCase()} (Raw Server Response)</summary>
+              <summary style="color: #38bdf8; font-size: 12px; cursor: pointer; font-weight: 600;">Xem phản hồi thô từ ${platform.toUpperCase()} (Raw Server Response)</summary>
               <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
-                <button class="btn-copy-zero-tiktok" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">📋 Sao chép</button>
+                <button class="btn-copy-zero-tiktok" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Sao chép</button>
               </div>
               <pre style="color: #cbd5e1; font-size: 11px; font-family: Consolas, monospace; max-height: 250px; overflow: auto; margin-top: 6px; white-space: pre-wrap; word-break: break-all;">${rawDump}</pre>
             </details>
@@ -127,8 +127,8 @@ export function setupTiktokModule({ tiktok }) {
 
         resultsList.querySelector('.btn-copy-zero-tiktok')?.addEventListener('click', (e) => {
           navigator.clipboard.writeText(rawDump);
-          e.target.textContent = '✅ Đã sao chép!';
-          setTimeout(() => { e.target.textContent = '📋 Sao chép'; }, 2000);
+          e.target.textContent = 'Đã sao chép!';
+          setTimeout(() => { e.target.textContent = 'Sao chép'; }, 2000);
         });
         return;
       }
@@ -137,19 +137,24 @@ export function setupTiktokModule({ tiktok }) {
         const card = document.createElement('div');
         card.className = 'video-card';
 
-        const authorName = (v.author && typeof v.author === 'object')
+        const rawAuthor = (v.author && typeof v.author === 'object')
           ? (v.author.nickname || v.author.uniqueId || 'Creator')
           : (v.authorName || (typeof v.author === 'string' ? v.author : 'Creator'));
+        const safeAuthor = escapeHtml(rawAuthor);
 
-        const cleanLink = (v.video && typeof v.video === 'object')
+        const rawClean = (v.video && typeof v.video === 'object')
           ? (v.video.url || v.video.downloadUrl || '')
           : (v.cleanVideoUrl || v.videoUrl || '');
+        const safeCleanLink = (rawClean && (rawClean.startsWith('http://') || rawClean.startsWith('https://'))) ? rawClean : '';
 
-        const coverUrl = (v.video && typeof v.video === 'object')
+        const rawCover = (v.video && typeof v.video === 'object')
           ? (v.video.cover || v.video.dynamicCover || '')
           : (v.coverUrl || '');
+        const fallbackPoster = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="%23281F1A" width="100" height="100"/><text fill="%23D1C0B4" font-size="14" font-family="sans-serif" font-weight="bold" x="50" y="55" text-anchor="middle" dominant-baseline="middle">VIDEO</text></svg>';
+        const safeCover = (rawCover && (rawCover.startsWith('http://') || rawCover.startsWith('https://'))) ? rawCover : fallbackPoster;
 
-        const desc = v.description || v.title || v.desc || 'Video Review';
+        const rawDesc = v.description || v.title || v.desc || 'Video Review';
+        const safeDesc = escapeHtml(rawDesc);
 
         const views = (v.stats && typeof v.stats === 'object')
           ? (v.stats.views || v.stats.playCount || 0)
@@ -159,30 +164,28 @@ export function setupTiktokModule({ tiktok }) {
           ? (v.stats.likes || v.stats.diggCount || 0)
           : (v.likeCount || 0);
 
-        const originalUrl = v.webUrl || (v.platform === 'douyin'
+        const rawOriginal = v.webUrl || (v.platform === 'douyin'
           ? `https://www.douyin.com/video/${v.id}`
           : `https://www.tiktok.com/@${(v.author && v.author.uniqueId) || 'video'}/video/${v.id}`);
-
-        const fallbackPoster = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2394a3b8" font-size="28" x="50" y="55" text-anchor="middle" dominant-baseline="middle">🎬</text></svg>';
-        const finalCover = coverUrl || fallbackPoster;
+        const safeOriginalUrl = (rawOriginal && (rawOriginal.startsWith('http://') || rawOriginal.startsWith('https://'))) ? rawOriginal : '#';
 
         card.innerHTML = `
           <div class="video-player-wrap">
-            ${cleanLink
-              ? `<video controls preload="metadata" poster="${finalCover}" src="${cleanLink}"></video>`
-              : `<img class="video-thumb-img" src="${finalCover}" referrerpolicy="no-referrer" style="width: 100%; height: 100%; object-fit: cover;">`
+            ${safeCleanLink
+              ? `<video controls preload="metadata" poster="${safeCover}" src="${safeCleanLink}"></video>`
+              : `<img class="video-thumb-img" src="${safeCover}" referrerpolicy="no-referrer" style="width: 100%; height: 100%; object-fit: cover;">`
             }
           </div>
           <div class="video-meta">
-            <div class="video-author">@${authorName}</div>
-            <div class="video-desc" title="${desc}">${desc}</div>
+            <div class="video-author">@${safeAuthor}</div>
+            <div class="video-desc" title="${safeDesc}">${safeDesc}</div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
-              <span>👁️ ${Number(views).toLocaleString()}</span>
-              <span>❤️ ${Number(likes).toLocaleString()}</span>
+              <span>Lượt xem: ${Number(views).toLocaleString()}</span>
+              <span>Thích: ${Number(likes).toLocaleString()}</span>
             </div>
             <div class="card-actions" style="margin-top: 6px;">
-              ${cleanLink ? `<a href="${cleanLink}" target="_blank" download="video.mp4" class="btn-card-action" style="color: #38bdf8;">Tải Video Sạch</a>` : ''}
-              <a href="${originalUrl}" target="_blank" class="btn-card-action">Mở Gốc</a>
+              ${safeCleanLink ? `<a href="${safeCleanLink}" target="_blank" rel="noopener noreferrer" download="video.mp4" class="btn-card-action" style="color: #38bdf8;">Tải Video Sạch</a>` : ''}
+              <a href="${safeOriginalUrl}" target="_blank" rel="noopener noreferrer" class="btn-card-action">Mở Gốc</a>
             </div>
           </div>
         `;
@@ -209,23 +212,26 @@ export function setupTiktokModule({ tiktok }) {
     if (!url) return;
 
     btnDetail.disabled = true;
-    statusText.textContent = 'Đang trích xuất luồng video sạch...';
+    statusText.textContent = 'Đang trích xuất video sạch không watermark...';
 
     try {
       const v = await tiktok.getVideoDetail(url);
-      const cleanLink = (v.video && typeof v.video === 'object') ? (v.video.url || v.video.downloadUrl) : (v.cleanVideoUrl || v.videoUrl);
-      const authorName = (v.author && typeof v.author === 'object') ? (v.author.nickname || v.author.uniqueId) : (v.authorName || 'Video');
-      const desc = v.description || v.title || v.desc || 'Video';
+      const rawClean = (v.video && typeof v.video === 'object') ? (v.video.url || v.video.downloadUrl) : (v.cleanVideoUrl || v.videoUrl);
+      const safeCleanLink = (rawClean && (rawClean.startsWith('http://') || rawClean.startsWith('https://'))) ? rawClean : '';
+      const rawAuthor = (v.author && typeof v.author === 'object') ? (v.author.nickname || v.author.uniqueId) : (v.authorName || 'Video');
+      const safeAuthor = escapeHtml(rawAuthor);
+      const rawDesc = v.description || v.title || v.desc || 'Video';
+      const safeDesc = escapeHtml(rawDesc);
 
       resultsList.innerHTML = `
         <div class="video-card" style="grid-column: 1 / -1; max-width: 400px; margin: 0 auto;">
           <div class="video-player-wrap">
-            <video controls autoplay src="${cleanLink}"></video>
+            ${safeCleanLink ? `<video controls autoplay src="${safeCleanLink}"></video>` : '<div style="padding:20px; color:#94a3b8;">Không có luồng video trực tiếp</div>'}
           </div>
           <div class="video-meta">
-            <div class="video-author">@${authorName}</div>
-            <div class="video-desc">${desc}</div>
-            <a href="${cleanLink}" target="_blank" download="clean_video.mp4" class="btn btn-tiktok" style="text-align: center; text-decoration: none; margin-top: 8px;">Tải Xuống MP4 Không Logo</a>
+            <div class="video-author">@${safeAuthor}</div>
+            <div class="video-desc">${safeDesc}</div>
+            ${safeCleanLink ? `<a href="${safeCleanLink}" target="_blank" rel="noopener noreferrer" download="clean_video.mp4" class="btn btn-tiktok" style="text-align: center; text-decoration: none; margin-top: 8px;">Tải Xuống MP4 Không Logo</a>` : ''}
           </div>
         </div>
       `;
@@ -237,4 +243,14 @@ export function setupTiktokModule({ tiktok }) {
       btnDetail.disabled = false;
     }
   });
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

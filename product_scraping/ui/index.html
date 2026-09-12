@@ -16,9 +16,9 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-brand">
-        <div class="brand-icon-wrap">⚡</div>
+        <img src="assets/logo.png" class="brand-logo-img" alt="Product Scraping Studio" />
         <div>
-          <h1 class="brand-title">PRODUCT SCRAPING</h1>
+          <h1 class="brand-title">PRODUCT SCRAPING STUDIO</h1>
           <p class="brand-subtitle">Hệ Thống Khai Thác & Phân Tích Sản Phẩm Đa Nền Tảng (Zero-API 0đ)</p>
         </div>
       </div>
@@ -31,12 +31,12 @@
 
         <button id="btnOpenWindow" class="btn-top-action" title="Mở ra một CỬA SỔ RIÊNG BIỆT - Không bao giờ bị tắt khi bạn click sang tab khác!">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
-          🪟 Cửa Sổ Riêng
+          Cửa Sổ Độc Lập
         </button>
 
         <button id="btnOpenFullTab" class="btn-top-action" title="Mở thành 1 Tab trình duyệt độc lập">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-          ⛶ Mở Tab Riêng
+          Mở Tab Trình Duyệt
         </button>
       </div>
     </header>
@@ -44,31 +44,31 @@
     <!-- Main Navigation Tabs (Ẩn theo yêu cầu để tập trung 100% vào Workflow Pipeline) -->
     <nav class="main-tabs" style="display: none;">
       <button class="nav-tab active" data-tab="tabWorkflow">
-        <span class="tab-icon">🚀</span>
+        
         <span>Workflow Pipeline</span>
       </button>
       <button class="nav-tab" data-tab="tabShopee">
-        <span class="tab-icon">🛍️</span>
+        
         <span>Shopee API</span>
       </button>
       <button class="nav-tab" data-tab="tabTiktok">
-        <span class="tab-icon">🎵</span>
+        
         <span>TikTok / Douyin</span>
       </button>
       <button class="nav-tab" data-tab="tab1688">
-        <span class="tab-icon">🏭</span>
+        
         <span>Alibaba 1688 Sỉ</span>
       </button>
       <button class="nav-tab" data-tab="tabLens">
-        <span class="tab-icon">🔍</span>
+        
         <span>Google Lens</span>
       </button>
       <button class="nav-tab" data-tab="tabGemini">
-        <span class="tab-icon">🤖</span>
+        
         <span>Gemini AI & Banana</span>
       </button>
       <button class="nav-tab tab-diagnostic" data-tab="tabHealthcheck">
-        <span class="tab-icon">⚡</span>
+        
         <span>Chẩn Đoán Toàn Bộ</span>
       </button>
     </nav>
@@ -85,7 +85,7 @@
           <span class="wf-tab-badge wf-badge-offline" id="wfBadgeGemini">Gemini AI</span>
         </div>
         <button class="wf-btn-mini wf-btn-history" id="wfBtnOpenHistory" title="Xem danh sách lịch sử dữ liệu đã thu thập">
-          🗄️ Lịch Sử Thu Thập (<span id="wfHistoryCount">0</span>)
+          Lịch Sử Thu Thập (<span id="wfHistoryCount">0</span>)
         </button>
       </div>
 
@@ -95,24 +95,25 @@
       <div class="wf-screen wf-screen-active" id="screenWorkflowInput">
         <div class="wf-card">
           <div class="wf-card-header">
-            <span class="wf-card-title">📸 1. Hình Ảnh Sản Phẩm Gốc (HD)</span>
+            <span class="wf-card-title">1. Hình Ảnh Sản Phẩm Gốc (HD)</span>
           </div>
           <div class="wf-card-body">
             <!-- Dropzone kéo thả -->
             <div class="wf-dropzone" id="wfDropzone">
-              <div class="wf-dropzone-icon">📥</div>
-              <div class="wf-dropzone-text">Kéo thả file ảnh vào đây hoặc <strong>click để chọn file</strong></div>
-              <div class="wf-dropzone-hint">Hỗ trợ định dạng JPG, PNG, WEBP độ nét cao</div>
-              <input type="file" id="wfFileInput" accept="image/*" style="display: none;">
+              
+              <div class="wf-dropzone-text">Kéo thả file ảnh vào đây hoặc click để chọn file</div>
+              <div class="wf-dropzone-hint">Hỗ trợ định dạng JPG, PNG, WEBP độ nét cao (hoặc Ctrl+V để dán ảnh)</div>
+              <button type="button" class="wf-btn-upload-browse" id="wfBtnBrowseFile">Chọn Ảnh Từ Máy Tính</button>
             </div>
+            <input type="file" id="wfFileInput" accept="image/*" style="display: none;">
 
             <!-- Khung xem trước khi đã có ảnh -->
             <div class="wf-preview-box" id="wfPreviewBox" style="display: none;">
               <img id="wfPreviewImg" src="" alt="Ảnh sản phẩm" />
               <div class="wf-preview-details">
-                <div class="wf-preview-status">✅ Đã nạp ảnh thành công</div>
+                <div class="wf-preview-status">Đã nạp ảnh thành công</div>
                 <div class="wf-preview-info" id="wfPreviewInfo">Kích thước: Đang phân tích</div>
-                <button class="wf-btn-text-danger" id="wfBtnRemoveImage">🗑️ Chọn ảnh khác</button>
+                <button class="wf-btn-text-danger" id="wfBtnRemoveImage">Chọn ảnh khác</button>
               </div>
             </div>
 
@@ -126,7 +127,7 @@
 
         <div class="wf-card">
           <div class="wf-card-header">
-            <span class="wf-card-title">🏷️ 2. Mã Định Danh Sản Phẩm (SKU)</span>
+            <span class="wf-card-title">2. Mã Định Danh Sản Phẩm (SKU)</span>
           </div>
           <div class="wf-card-body">
             <div class="wf-sku-group">
@@ -136,10 +137,54 @@
           </div>
         </div>
 
+        <!-- Cấu hình Nền tảng & Thị trường trước khi chạy -->
+        <div class="wf-card">
+          <div class="wf-card-header">
+            <span class="wf-card-title">3. Cấu Hình Nền Tảng Khai Thác</span>
+          </div>
+          <div class="wf-card-body">
+            <div class="wf-settings-grid">
+              <!-- Chọn Thị trường Shopee -->
+              <div class="wf-setting-group">
+                <label class="wf-setting-label">Thị trường Shopee mục tiêu:</label>
+                <div class="wf-pill-toggle-group" id="wfShopeeMarketGroup">
+                  <label class="wf-pill-item">
+                    <input type="radio" name="wfShopeeMarket" value="ph" checked>
+                    <span class="wf-pill-btn">Shopee Philippines (.ph)</span>
+                  </label>
+                  <label class="wf-pill-item">
+                    <input type="radio" name="wfShopeeMarket" value="vn">
+                    <span class="wf-pill-btn">Shopee Việt Nam (.vn)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Chọn Nền tảng Video Review -->
+              <div class="wf-setting-group">
+                <label class="wf-setting-label">Nền tảng Video Review:</label>
+                <div class="wf-pill-toggle-group" id="wfVideoPlatformGroup">
+                  <label class="wf-pill-item">
+                    <input type="radio" name="wfVideoPlatform" value="both" checked>
+                    <span class="wf-pill-btn">Tất cả (Douyin + TikTok)</span>
+                  </label>
+                  <label class="wf-pill-item">
+                    <input type="radio" name="wfVideoPlatform" value="douyin">
+                    <span class="wf-pill-btn">Douyin (Trung Quốc)</span>
+                  </label>
+                  <label class="wf-pill-item">
+                    <input type="radio" name="wfVideoPlatform" value="tiktok">
+                    <span class="wf-pill-btn">TikTok (Quốc tế)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Nút kích hoạt bắt đầu Pipeline -->
         <div class="wf-actions-bar">
           <button class="wf-btn wf-btn-primary wf-btn-large" id="wfBtnStartPipeline" disabled>
-            🚀 Bắt Đầu Chạy Pipeline Tự Động (10 Bước)
+            Bắt Đầu Khai Thác Dữ Liệu (10 Bước)
           </button>
         </div>
       </div>
@@ -174,13 +219,25 @@
             <div class="wf-step-item" data-step="9">9. Manifest & TSV</div>
             <div class="wf-step-item" data-step="10">10. Hoàn Tất</div>
           </div>
+
+          <!-- Live Thumbnail Ticker (Card ảnh trượt ngang thời gian thực) -->
+          <div class="wf-ticker-card">
+            <div class="wf-ticker-head">
+              <div class="wf-ticker-title-wrap">
+                <span class="wf-ticker-dot"></span>
+                <span class="wf-ticker-title">DÒNG ẢNH VỪA KHỚP THỜI GIAN THỰC</span>
+              </div>
+              <span class="wf-ticker-hint">Tự động cuộn khi phát hiện sản phẩm mới</span>
+            </div>
+            <div class="wf-ticker-track" id="liveThumbnailTicker"></div>
+          </div>
         </div>
 
         <!-- Banner Hoàn Tất & Thao Tác Nhanh (Xuất hiện khi đạt 100% - Giữ nguyên màn hình) -->
         <div class="wf-card wf-complete-card" id="wfProgressCompleteBanner" style="display: none;">
           <div class="wf-complete-head">
             <div class="wf-complete-title-wrap">
-              <span class="wf-complete-icon">🎉</span>
+              
               <div>
                 <div class="wf-complete-title" id="wfCompleteTitle">QUY TRÌNH THU THẬP ĐÃ HOÀN TẤT 100%!</div>
                 <div class="wf-complete-subtitle" id="wfCompleteSubtitle">Dữ liệu đã sẵn sàng tải xuống hoặc xem phân tích. Bạn có thể kiểm tra từng thẻ data bên dưới bao lâu tùy ý.</div>
@@ -190,16 +247,16 @@
           </div>
           <div class="wf-complete-actions">
             <button class="wf-btn wf-btn-download" id="wfBtnQuickDownloadZip">
-              <span>📦</span> Tải File ZIP {SKU}.zip
+              Tải File ZIP ({SKU})
             </button>
             <button class="wf-btn wf-btn-copy" id="wfBtnQuickCopyTsv">
-              <span>📋</span> Sao Chép TSV (24 Cột)
+              Sao Chép TSV (24 Cột)
             </button>
             <button class="wf-btn wf-btn-primary" id="wfBtnGoToResultDashboard">
-              <span>📊</span> Xem Bảng Tổng Hợp Kết Quả & Specs ➡️
+              Bảng Tổng Hợp Kết Quả & Specs
             </button>
             <button class="wf-btn wf-btn-secondary" id="wfBtnQuickDownloadLog">
-              <span>📥</span> Tải File Log (.txt)
+              Tải File Log (.txt)
             </button>
           </div>
         </div>
@@ -208,7 +265,7 @@
         <div class="wf-card wf-error-card" id="wfErrorDebugBox" style="display: none;">
           <div class="wf-error-head">
             <div class="wf-error-title-wrap">
-              <span class="wf-error-icon">🛑</span>
+              
               <div>
                 <div class="wf-error-title" id="wfErrorTitle">DỪNG LẠI TẠI BƯỚC 1: GẶP LỖI</div>
                 <div class="wf-error-subtitle">Hệ thống đã dừng pipeline ngay lập tức để bạn kiểm tra và debug.</div>
@@ -221,13 +278,13 @@
           </div>
           <div class="wf-error-actions">
             <button class="wf-btn wf-btn-secondary" id="wfBtnCopyErrorDetails">
-              📋 Sao Chép Lỗi Để Debug
+              Sao Chép Lỗi Để Debug
             </button>
             <button class="wf-btn wf-btn-warning" id="wfBtnRetryPipeline">
-              🔄 Chạy Lại Pipeline
+              Chạy Lại Pipeline
             </button>
             <button class="wf-btn wf-btn-danger" id="wfBtnBackToInput">
-              ↩️ Quay Lại Màn 1
+              Quay Lại Màn Nhập Liệu
             </button>
           </div>
         </div>
@@ -244,13 +301,13 @@
               <div class="wf-feed-title-wrap">
                 <span class="wf-feed-num">1</span>
                 <div>
-                  <div class="wf-feed-title">📸 Danh Sách Ảnh 1688 Gốc (Found Images)</div>
+                  <div class="wf-feed-title">Danh Sách Ảnh 1688 Gốc</div>
                   <div class="wf-feed-subtitle" id="feed1688RawSubtitle">Đang chờ quét ảnh qua 1688 API...</div>
                 </div>
               </div>
               <span class="wf-feed-pill pill-orange" id="feed1688RawPill">0 Shop</span>
             </div>
-            <div class="wf-feed-body">
+            <div class="wf-feed-body" id="feed1688RawContent">
               <div class="wf-1688-images-grid" id="feed1688ImagesGrid">
                 <div class="wf-feed-empty-hint">Chưa có ảnh 1688...</div>
               </div>
@@ -263,7 +320,7 @@
               <div class="wf-feed-title-wrap">
                 <span class="wf-feed-num">2</span>
                 <div>
-                  <div class="wf-feed-title">🧹 Mô Tả Chi Tiết, Thông Số & 5 Link Thô 1688</div>
+                  <div class="wf-feed-title">Mô Tả Chi Tiết, Thông Số & Dữ Liệu Thô 1688</div>
                   <div class="wf-feed-subtitle" id="feed1688CleanSubtitle">Đang chờ đóng gói mô tả, thông số và lưu dữ liệu 5 link thô 1688...</div>
                 </div>
               </div>
@@ -280,7 +337,7 @@
               <div class="wf-feed-title-wrap">
                 <span class="wf-feed-num">3</span>
                 <div>
-                  <div class="wf-feed-title">🤖 Toàn Bộ Từ Khóa Do Gemini AI Sinh Ra</div>
+                  <div class="wf-feed-title">Toàn Bộ Từ Khóa Do Gemini AI Sinh Ra</div>
                   <div class="wf-feed-subtitle" id="feedGeminiKwSubtitle">Đang chờ tạo từ khóa tiếng Anh/Taglish cho Shopee PH & TikTok...</div>
                 </div>
               </div>
@@ -297,7 +354,7 @@
               <div class="wf-feed-title-wrap">
                 <span class="wf-feed-num">4</span>
                 <div>
-                  <div class="wf-feed-title">🛒 Sản Phẩm Tìm Thấy Trên Shopee Philippines</div>
+                  <div class="wf-feed-title">Sản Phẩm Tìm Thấy Trên Shopee</div>
                   <div class="wf-feed-subtitle" id="feedShopeePhSubtitle">Đang chờ quét từ khóa hàng ngách trên Shopee PH...</div>
                 </div>
               </div>
@@ -314,7 +371,7 @@
               <div class="wf-feed-title-wrap">
                 <span class="wf-feed-num">5</span>
                 <div>
-                  <div class="wf-feed-title">🎬 Video Thực Tế & Đánh Giá Sản Phẩm (Douyin & TikTok)</div>
+                  <div class="wf-feed-title">Video Thực Tế & Đánh Giá Sản Phẩm (Douyin & TikTok)</div>
                   <div class="wf-feed-subtitle" id="feedTiktokSubtitle">Đang cào sâu nhiều trang và gửi thumbnail cho Gemini Vision thẩm định...</div>
                 </div>
               </div>
@@ -330,12 +387,12 @@
         <!-- Terminal Console Logs (Luôn hiển thị) -->
         <div class="wf-card wf-terminal-card">
           <div class="wf-terminal-head">
-            <span class="wf-terminal-title">💻 Terminal Console (Thời Gian Thực)</span>
+            <span class="wf-terminal-title">Terminal Console (Thời Gian Thực)</span>
             <div class="wf-terminal-actions">
-              <button class="wf-btn-mini" id="wfBtnToggleScroll">📜 Cuộn: BẬT</button>
-              <button class="wf-btn-mini" id="wfBtnCopyLog">📋 Copy Log</button>
-              <button class="wf-btn-mini" id="wfBtnDownloadTerminalLog">📥 Tải Log</button>
-              <button class="wf-btn-mini" id="wfBtnClearLog">🗑️ Xóa</button>
+              <button class="wf-btn-mini" id="wfBtnToggleScroll">Tự động cuộn: BẬT</button>
+              <button class="wf-btn-mini" id="wfBtnCopyLog">Sao Chép Log</button>
+              <button class="wf-btn-mini" id="wfBtnDownloadTerminalLog">Tải Log</button>
+              <button class="wf-btn-mini" id="wfBtnClearLog">Xóa</button>
             </div>
           </div>
           <div class="wf-terminal-body" id="terminalLogOutput"></div>
@@ -344,26 +401,26 @@
         <!-- Điều khiển Tiến trình: Tạm dừng / Hủy -->
         <div class="wf-control-bar" id="wfControlBar">
           <button class="wf-btn wf-btn-warning" id="wfBtnPauseResume">
-            <span>⏸️</span> Tạm Dừng
+            Tạm Dừng
           </button>
           <button class="wf-btn wf-btn-danger" id="wfBtnAbort">
-            <span>⏹️</span> Hủy Bỏ
+            Hủy Bỏ
           </button>
         </div>
 
         <!-- Thanh điều khiển chân trang khi hoàn tất -->
         <div class="wf-control-bar wf-complete-footer" id="wfProgressCompleteFooter" style="display: none;">
           <button class="wf-btn wf-btn-download" id="wfBtnBottomDownloadZip">
-            <span>📦</span> Tải File ZIP
+            Tải File ZIP
           </button>
           <button class="wf-btn wf-btn-copy" id="wfBtnBottomCopyTsv">
-            <span>📋</span> Sao Chép TSV
+            Sao Chép TSV
           </button>
           <button class="wf-btn wf-btn-primary" id="wfBtnBottomGoResult">
-            <span>📊</span> Bảng Kết Quả & Specs ➡️
+            Bảng Kết Quả & Specs
           </button>
           <button class="wf-btn wf-btn-secondary" id="wfBtnProgressNewProduct">
-            <span>🔄</span> Sản Phẩm Mới
+            Sản Phẩm Mới
           </button>
         </div>
       </div>
@@ -375,7 +432,7 @@
         <!-- Thanh điều hướng 2 chiều quay lại Dòng chảy dữ liệu & Logs -->
         <div class="wf-result-nav-bar">
           <button class="wf-btn wf-btn-secondary" id="wfBtnBackToProgress">
-            <span>⬅️</span> Quay Lại Xem Dòng Chảy Dữ Liệu & Logs
+            Quay Lại Dòng Chảy Dữ Liệu & Logs
           </button>
           <span class="wf-result-nav-hint">Toàn bộ dữ liệu và log vẫn được bảo lưu 100%</span>
         </div>
@@ -383,7 +440,7 @@
         <!-- Banner tổng kết -->
         <div class="wf-result-banner">
           <div class="wf-result-title-wrap">
-            <div class="wf-result-icon">🎉</div>
+            
             <div>
               <h3 class="wf-result-heading">Xử Lý Hoàn Tất!</h3>
               <p class="wf-result-sku" id="wfResultSkuTitle">Mã SKU: PRODUCT-01</p>
@@ -406,7 +463,7 @@
             </div>
             <div class="wf-stat-box">
               <div class="wf-stat-num" id="wfStatReviewsCount">10 Đánh giá</div>
-              <div class="wf-stat-label">5⭐ Kèm Media</div>
+              <div class="wf-stat-label">Đánh Giá 5 Sao Kèm Media</div>
             </div>
           </div>
         </div>
@@ -414,11 +471,11 @@
         <!-- Tabs xem trước dữ liệu kết quả -->
         <div class="wf-card">
           <div class="wf-res-tabs">
-            <button class="wf-res-tab-btn active" data-target="wfPanelVideos">🎬 Video Review (Douyin & TikTok)</button>
-            <button class="wf-res-tab-btn" data-target="wfPanelReviews">⭐ 10 Review 5⭐ Media</button>
-            <button class="wf-res-tab-btn" data-target="wfPanelSpecs">📊 Giá Đối Sánh & Specs</button>
-            <button class="wf-res-tab-btn" data-target="wfPanelProcessData">🔍 Quá Trình & Lọc Dữ Liệu</button>
-            <button class="wf-res-tab-btn" data-target="wfPanelLogs">💻 Xem Lại Log</button>
+            <button class="wf-res-tab-btn active" data-target="wfPanelVideos">Video Review (Douyin & TikTok)</button>
+            <button class="wf-res-tab-btn" data-target="wfPanelReviews">Top Review 5 Sao Kèm Media</button>
+            <button class="wf-res-tab-btn" data-target="wfPanelSpecs">Bảng Đối Sánh Giá & Thông Số</button>
+            <button class="wf-res-tab-btn" data-target="wfPanelProcessData">Quá Trình & Lọc Dữ Liệu</button>
+            <button class="wf-res-tab-btn" data-target="wfPanelLogs">Xem Lại Log</button>
           </div>
 
           <div class="wf-res-tab-content">
@@ -445,7 +502,7 @@
             <!-- Tab 5: Xem lại Terminal Log -->
             <div class="wf-res-tab-panel" id="wfPanelLogs" style="display: none;">
               <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-                <button class="wf-btn-mini" id="wfBtnDownloadResultLog">📥 Tải Toàn Bộ File Log (.txt)</button>
+                <button class="wf-btn-mini" id="wfBtnDownloadResultLog">Tải Toàn Bộ File Log (.txt)</button>
               </div>
               <div class="wf-terminal-body" id="wfResultLogOutput" style="height: 220px;"></div>
             </div>
@@ -455,13 +512,13 @@
         <!-- Các nút hành động xuất file -->
         <div class="wf-export-bar">
           <button class="wf-btn wf-btn-download" id="wfBtnDownloadZip">
-            <span>📦</span> Tải File ZIP {SKU}.zip
+            Tải File ZIP ({SKU})
           </button>
           <button class="wf-btn wf-btn-copy" id="wfBtnCopyTsv">
-            <span>📋</span> Sao Chép Bảng Tính (24 Cột)
+            Sao Chép Bảng Tính (24 Cột)
           </button>
           <button class="wf-btn wf-btn-secondary" id="wfBtnNewProduct">
-            <span>🔄</span> Sản Phẩm Mới
+            Sản Phẩm Mới
           </button>
         </div>
       </div>
@@ -471,17 +528,17 @@
       <!-- ======================================================= -->
       <div class="wf-screen" id="screenWorkflowWarning" style="display: none;">
         <div class="wf-warning-card">
-          <div class="wf-warning-icon">⚠️</div>
+          
           <h3 class="wf-warning-title">Phát Hiện Xác Thực Robot / Captcha</h3>
           <p class="wf-warning-desc" id="wfCaptchaDesc">
             Hệ thống 1688 hoặc Shopee đang yêu cầu kéo thanh trượt Slider. Vui lòng bấm nút bên dưới để mở tab giải captcha bằng tay.
           </p>
           <div class="wf-warning-actions">
             <button class="wf-btn wf-btn-primary" id="wfBtnOpenCaptchaTab">
-              🌐 Mở Tab Giải Captcha Ngay
+              Mở Tab Giải Captcha
             </button>
             <button class="wf-btn wf-btn-success" id="wfBtnResumeAfterCaptcha">
-              ✅ Tôi Đã Giải Xong, Tiếp Tục!
+              Tiếp Tục Quy Trình
             </button>
           </div>
         </div>
@@ -497,7 +554,7 @@
           <span id="shopeeTabStatus">Đang kiểm tra kết nối Tab Shopee...</span>
         </div>
         <button class="btn-bypass btn-shopee-color" id="btnOpenShopeeTab">
-          🌐 Mở Tab Shopee.vn (In-Tab Bypass 100%)
+          Mở Tab Shopee.vn (In-Tab Bypass 100%)
         </button>
       </div>
 
@@ -505,7 +562,7 @@
         <!-- Search Products -->
         <div class="tool-card">
           <div class="card-head">
-            <span class="card-head-title">🔍 1. Tìm Kiếm Sản Phẩm Shopee</span>
+            <span class="card-head-title">1. Tìm Kiếm Sản Phẩm Shopee</span>
           </div>
           <div class="card-body">
             <div class="input-group">
@@ -524,7 +581,7 @@
         <!-- Scrape Product Detail -->
         <div class="tool-card">
           <div class="card-head">
-            <span class="card-head-title">📦 2. Cào Chi Tiết & Ảnh/Video Gốc từ Link</span>
+            <span class="card-head-title">2. Cào Chi Tiết & Ảnh/Video Gốc từ Link</span>
           </div>
           <div class="card-body">
             <div class="input-group">
@@ -556,9 +613,9 @@
           <span id="tiktokTabStatus">Đang kiểm tra tab TikTok & Douyin...</span>
         </div>
         <div class="toolbar-actions">
-          <button class="btn-bypass" id="btnDebugTiktok" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8;" title="Kiểm tra kết nối và xuất log phản hồi thô từ TikTok/Douyin API">🐞 Báo Lỗi Thô</button>
-          <button class="btn-bypass btn-tiktok-color" id="btnOpenTiktokTab">🌐 Mở Tab TikTok</button>
-          <button class="btn-bypass btn-douyin-color" id="btnOpenDouyinTab">🌐 Mở Tab Douyin</button>
+          <button class="btn-bypass" id="btnDebugTiktok" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8;" title="Kiểm tra kết nối và xuất log phản hồi thô từ TikTok/Douyin API">Báo Lỗi Thô</button>
+          <button class="btn-bypass btn-tiktok-color" id="btnOpenTiktokTab">Mở Tab TikTok</button>
+          <button class="btn-bypass btn-douyin-color" id="btnOpenDouyinTab">Mở Tab Douyin</button>
         </div>
       </div>
 
@@ -566,7 +623,7 @@
         <!-- Search Videos -->
         <div class="tool-card">
           <div class="card-head">
-            <span class="card-head-title">🔍 1. Tìm Kiếm Video Sản Phẩm / Review</span>
+            <span class="card-head-title">1. Tìm Kiếm Video Sản Phẩm / Review</span>
           </div>
           <div class="card-body">
             <div class="input-group">
@@ -583,7 +640,7 @@
         <!-- Extract Clean Video -->
         <div class="tool-card">
           <div class="card-head">
-            <span class="card-head-title">📹 2. Lấy Video Gốc Không Watermark / Logo</span>
+            <span class="card-head-title">2. Lấy Video Gốc Không Watermark / Logo</span>
           </div>
           <div class="card-body">
             <div class="input-group">
@@ -610,29 +667,29 @@
           <span id="alibabaTabStatus">Đang nạp H5 Token 1688...</span>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn-bypass" id="btnSyncTabCookie1688" style="background: #1e293b; border: 1px solid #334155; color: #10b981;" title="Tự động lấy và làm mới Cookie & Token trực tiếp từ trình duyệt">🔄 Tự Động Đồng Bộ Trình Duyệt</button>
-          <button class="btn-bypass" id="btnDebug1688" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8;" title="Kiểm tra trạng thái H5 Token, Cookie và phản hồi thô từ Alibaba Gateway">🐞 Kiểm Tra & Báo Lỗi Thô</button>
-          <button class="btn-bypass btn-1688-color" id="btnOpen1688Tab">🌐 Mở Tab 1688.com (In-Tab Bypass)</button>
+          <button class="btn-bypass" id="btnSyncTabCookie1688" style="background: #1e293b; border: 1px solid #334155; color: #10b981;" title="Tự động lấy và làm mới Cookie & Token trực tiếp từ trình duyệt">Tự Động Đồng Bộ Trình Duyệt</button>
+          <button class="btn-bypass" id="btnDebug1688" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8;" title="Kiểm tra trạng thái H5 Token, Cookie và phản hồi thô từ Alibaba Gateway">Kiểm Tra & Báo Lỗi Thô</button>
+          <button class="btn-bypass btn-1688-color" id="btnOpen1688Tab">Mở Tab 1688.com (In-Tab Bypass)</button>
         </div>
       </div>
 
       <!-- Image Search Zone -->
       <div class="tool-card">
         <div class="card-head">
-          <span class="card-head-title">🖼️ 1. Tìm Nguồn Hàng Gốc Bằng Hình Ảnh (Visual Sourcing)</span>
+          <span class="card-head-title">1. Tìm Nguồn Hàng Gốc Bằng Hình Ảnh (Visual Sourcing)</span>
         </div>
         <div class="card-body">
           <div class="drop-zone" id="dropZone1688">
-            <div class="drop-icon">📷</div>
+            
             <div class="drop-text">Kéo thả ảnh sản phẩm vào đây, bấm để chọn file hoặc nhấn <strong>Ctrl+V</strong> để dán ảnh</div>
             <input type="file" id="fileInput1688" accept="image/*" style="display: none;">
             <div id="previewContainer1688" class="preview-wrap" style="display: none;">
               <img id="imgPreview1688" alt="Preview">
-              <button id="btnRemove1688Img" class="btn-remove-preview">✕</button>
+              <button id="btnRemove1688Img" class="btn-remove-preview">&times;</button>
             </div>
           </div>
           <button class="btn btn-1688" id="btn1688SearchFile" style="width: 100%; margin-top: 10px; display: none; padding: 10px; font-size: 13px; font-weight: 700;">
-            🔍 Bắt Đầu Tìm Xưởng 1688 Bằng Ảnh Này
+            Bắt Đầu Tìm Xưởng 1688 Bằng Ảnh Này
           </button>
           <div class="input-group" style="margin-top: 10px;">
             <input type="text" id="input1688ImageUrl" placeholder="Hoặc dán trực tiếp link ảnh từ Shopee / TikTok...">
@@ -644,7 +701,7 @@
       <!-- Keyword Search -->
       <div class="tool-card">
         <div class="card-head">
-          <span class="card-head-title">🔍 2. Tìm Theo Từ Khóa Tiếng Trung / Tiếng Anh</span>
+          <span class="card-head-title">2. Tìm Theo Từ Khóa Tiếng Trung / Tiếng Anh</span>
         </div>
         <div class="card-body">
           <div class="input-group">
@@ -669,25 +726,25 @@
           <span class="status-dot dot-green" id="lensDot"></span>
           <span id="lensTabStatus">Google Lens API Sẵn Sàng (Zero-API 0đ)</span>
         </div>
-        <button class="btn-bypass btn-lens-color" id="btnOpenLensWeb">🌐 Mở lens.google.com</button>
+        <button class="btn-bypass btn-lens-color" id="btnOpenLensWeb">Mở lens.google.com</button>
       </div>
 
       <div class="tool-card">
         <div class="card-head">
-          <span class="card-head-title">🔍 Tìm Kiếm Ngược Hình Ảnh & So Sánh Giá Đa Sàn</span>
+          <span class="card-head-title">Tìm Kiếm Ngược Hình Ảnh & So Sánh Giá Đa Sàn</span>
         </div>
         <div class="card-body">
           <div class="drop-zone" id="dropZoneLens">
-            <div class="drop-icon">🔎</div>
+            
             <div class="drop-text">Kéo thả ảnh vào đây, chọn file từ máy, hoặc nhấn <strong>Ctrl+V</strong> dán ảnh từ clipboard</div>
             <input type="file" id="fileInputLens" accept="image/*" style="display: none;">
             <div id="previewContainerLens" class="preview-wrap" style="display: none;">
               <img id="imgPreviewLens" alt="Lens Preview">
-              <button id="btnRemoveLensImg" class="btn-remove-preview">✕</button>
+              <button id="btnRemoveLensImg" class="btn-remove-preview">&times;</button>
             </div>
           </div>
           <button class="btn btn-lens" id="btnLensSearchFile" style="width: 100%; margin-top: 10px; display: none; padding: 10px; font-size: 13px; font-weight: 700;">
-            🔍 Quét Ảnh Này Qua Google Lens
+            Quét Ảnh Qua Google Lens
           </button>
           <div class="input-group" style="margin-top: 10px;">
             <input type="text" id="inputLensImageUrl" placeholder="Hoặc dán URL ảnh sản phẩm cần đối chiếu...">
@@ -699,10 +756,10 @@
       <!-- Lens Sub-Tabs -->
       <div class="sub-tabs-bar">
         <button class="sub-tab-btn active" id="subTabLensShopping">
-          🛒 Ưu Đãi Mua Sắm (<span id="lensCountShopping">0</span>)
+          Ưu Đãi Mua Sắm (<span id="lensCountShopping">0</span>)
         </button>
         <button class="sub-tab-btn" id="subTabLensVisual">
-          🖼️ Ảnh Tương Đồng (<span id="lensCountVisual">0</span>)
+          Ảnh Tương Đồng (<span id="lensCountVisual">0</span>)
         </button>
       </div>
 
@@ -722,14 +779,14 @@
             <option value="3.1-pro">Gemini 3.1 Pro (Lập luận sâu)</option>
             <option value="3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
           </select>
-          <button class="btn-bypass btn-gemini-color" id="btnOpenGeminiWeb">🌐 Mở gemini.google.com</button>
+          <button class="btn-bypass btn-gemini-color" id="btnOpenGeminiWeb">Mở gemini.google.com</button>
         </div>
       </div>
 
       <!-- Gemini Sub-Tabs: Chat vs Banana Studio -->
       <div class="sub-tabs-bar">
-        <button class="sub-tab-btn active" id="subTabGeminiChat">💬 AI Chat & Viết Content</button>
-        <button class="sub-tab-btn" id="subTabGeminiBanana">🍌 Banana Studio (Tạo Ảnh 1K/2K)</button>
+        <button class="sub-tab-btn active" id="subTabGeminiChat">AI Chat & Viết Content</button>
+        <button class="sub-tab-btn" id="subTabGeminiBanana">Banana Studio (Tạo Ảnh 1K/2K)</button>
       </div>
 
       <!-- Gemini Chat View -->
@@ -737,16 +794,16 @@
         <!-- Message History -->
         <div class="chat-messages" id="chatMessages">
           <div class="msg-bubble msg-ai">
-            <div class="msg-author">🤖 Gemini AI</div>
+            <div class="msg-author">Gemini AI</div>
             <div class="msg-content">Xin chào! Tôi có thể giúp bạn viết mô tả sản phẩm Shopee, dịch thuật tiêu đề 1688 tiếng Trung, hoặc lên kịch bản video TikTok. Hãy nhập câu hỏi bên dưới nhé!</div>
           </div>
         </div>
 
         <!-- Quick Chips -->
         <div class="quick-chips">
-          <button class="chip-btn" data-prompt="Viết mô tả sản phẩm túi du lịch chống nước chuẩn SEO Shopee đầy đủ hashtag">📝 Viết mô tả Shopee</button>
+          <button class="chip-btn" data-prompt="Viết mô tả sản phẩm túi du lịch chống nước chuẩn SEO Shopee đầy đủ hashtag">Viết mô tả Shopee</button>
           <button class="chip-btn" data-prompt="Dịch tiêu đề sau sang tiếng Việt tự nhiên và trích xuất từ khóa chính: ">🇨🇳 Dịch tiêu đề 1688</button>
-          <button class="chip-btn" data-prompt="Lên kịch bản 30 giây review sản phẩm thời trang ngắn gọn, bắt trend TikTok">🎬 Kịch bản TikTok</button>
+          <button class="chip-btn" data-prompt="Lên kịch bản 30 giây review sản phẩm thời trang ngắn gọn, bắt trend TikTok">Kịch bản TikTok</button>
         </div>
 
         <!-- Chat Input -->
@@ -760,7 +817,7 @@
       <div id="geminiBananaView" class="banana-container" style="display: none;">
         <div class="tool-card">
           <div class="card-head">
-            <span class="card-head-title">🍌 Tạo Ảnh Bằng Google Banana (Imagen 3 / Pro)</span>
+            <span class="card-head-title">Tạo Ảnh Bằng Google Banana (Imagen 3 / Pro)</span>
           </div>
           <div class="card-body">
             <div class="input-group">
@@ -789,8 +846,8 @@
     <main class="tab-content" id="tabHealthcheck">
       <div class="tool-card">
         <div class="card-head" style="justify-content: space-between;">
-          <span class="card-head-title">⚡ Chẩn Đoán Sức Khỏe Toàn Bộ 5 SDK (Zero-API)</span>
-          <button class="btn btn-primary" id="btnRunSuiteCheck">🚀 Bắt Đầu Kiểm Tra Toàn Bộ</button>
+          <span class="card-head-title">Chẩn Đoán Sức Khỏe Toàn Bộ 5 SDK (Zero-API)</span>
+          <button class="btn btn-primary" id="btnRunSuiteCheck">Bắt Đầu Kiểm Tra Toàn Bộ</button>
         </div>
         <div class="card-body">
           <div class="progress-bar-container">
@@ -811,17 +868,17 @@
     <div class="wf-modal-container">
       <div class="wf-modal-head">
         <div class="wf-modal-title-wrap">
-          <span class="wf-modal-icon">🗄️</span>
+          
           <div>
             <div class="wf-modal-title">Lịch Sử Dữ Liệu Thu Thập (Workflow Archive)</div>
             <div class="wf-modal-subtitle">Toàn bộ phiên dữ liệu cũ được bảo lưu an toàn trong bộ nhớ máy tính.</div>
           </div>
         </div>
-        <button class="wf-btn-mini" id="wfBtnCloseHistory">✕ Đóng</button>
+        <button class="wf-btn-mini" id="wfBtnCloseHistory">&times; Đóng</button>
       </div>
       <div class="wf-modal-toolbar">
         <span id="wfHistoryTotalLabel">Tổng cộng: 0 phiên</span>
-        <button class="wf-btn-mini wf-btn-danger" id="wfBtnClearAllHistory">🗑️ Xóa Tất Cả</button>
+        <button class="wf-btn-mini wf-btn-danger" id="wfBtnClearAllHistory">Xóa Tất Cả</button>
       </div>
       <div class="wf-modal-body" id="wfHistoryListContainer">
         <!-- Danh sách items -->

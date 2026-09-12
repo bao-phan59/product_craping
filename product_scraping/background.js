@@ -18,6 +18,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'OPEN_FULL_TAB') {
     chrome.tabs.create({ url: chrome.runtime.getURL('ui/index.html') });
     sendResponse({ status: 'ok' });
+    return false;
   } else if (request.action === 'OPEN_WINDOW') {
     chrome.windows.create({
       url: chrome.runtime.getURL('ui/index.html'),
@@ -27,14 +28,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       focused: true
     });
     sendResponse({ status: 'ok' });
+    return false;
   } else if (request.action === 'OPEN_SIDE_PANEL') {
     if (chrome.sidePanel && chrome.sidePanel.open && sender.tab?.id) {
       chrome.sidePanel.open({ tabId: sender.tab.id });
     }
     sendResponse({ status: 'ok' });
+    return false;
   } else if (request.action === 'OPEN_URL') {
     chrome.tabs.create({ url: request.url, active: true });
     sendResponse({ status: 'ok' });
+    return false;
   } else if (request.action === 'ENSURE_TAB_OPEN') {
     ensureTabOpen(request.payload.url, request.payload.matchPattern)
       .then(tab => sendResponse({ success: true, tab }))
@@ -45,27 +49,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(downloadId => sendResponse({ success: true, downloadId }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
-  } else if (request.action === 'PROXY_FETCH') {
-    (async () => {
-      try {
-        const { url, options } = request.payload || {};
-        const res = await fetch(url, options || {});
-        const text = await res.text();
-        sendResponse({
-          success: true,
-          ok: res.ok,
-          status: res.status,
-          statusText: res.statusText,
-          finalUrl: res.url,
-          text: text,
-        });
-      } catch (err) {
-        sendResponse({ success: false, error: err.message });
-      }
-    })();
-    return true;
   }
-  return true;
+  return false;
 });
 
 /**
@@ -80,21 +65,35 @@ async function ensureTabOpen(platformUrl, matchPattern) {
     // Mở tab ngầm không chiếm active view
     const newTab = await chrome.tabs.create({ url: platformUrl, active: false });
     
-    // Đợi tab tải xong (status === 'complete')
-    await new Promise((resolve) => {
+    // Đợi tab tải xong (status === 'complete') hoặc bị đóng sớm
+    await new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(updateListener);
+        chrome.tabs.onRemoved.removeListener(removeListener);
+      };
+
       const timeout = setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
+        cleanup();
         resolve(newTab);
       }, 15000); // 15 giây timeout tối đa
 
-      function listener(tabId, changeInfo) {
+      function updateListener(tabId, changeInfo) {
         if (tabId === newTab.id && changeInfo.status === 'complete') {
-          clearTimeout(timeout);
-          chrome.tabs.onUpdated.removeListener(listener);
+          cleanup();
           resolve(newTab);
         }
       }
-      chrome.tabs.onUpdated.addListener(listener);
+
+      function removeListener(tabId) {
+        if (tabId === newTab.id) {
+          cleanup();
+          reject(new Error(`Tab (${platformUrl}) đã bị đóng trước khi hoàn tất tải.`));
+        }
+      }
+
+      chrome.tabs.onUpdated.addListener(updateListener);
+      chrome.tabs.onRemoved.addListener(removeListener);
     });
 
     return newTab;

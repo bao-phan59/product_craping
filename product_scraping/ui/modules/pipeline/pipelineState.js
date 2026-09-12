@@ -38,10 +38,16 @@ export const pipelineState = {
   topReviews: [],
   // Videos Raw & Gemini Verified
   rawVideoCandidates: [],
-  rawTikTokVideos: [],
   formattedVideos: [],
   enrichedData: null,
   processData: null,
+  settings: {
+    shopeeMarket: 'ph',
+    videoPlatform: 'both'
+  },
+  allRaw1688Specs: [],
+  landingPageReviews: [],
+  allVerifiedReviews: [],
   errors: []
 };
 
@@ -49,8 +55,9 @@ export const pipelineState = {
  * Reset dữ liệu trạng thái cho một phiên SKU mới
  * @param {string} sku 
  * @param {string} originalImage 
+ * @param {Object} [settings={}]
  */
-export function resetPipelineState(sku, originalImage) {
+export function resetPipelineState(sku, originalImage, settings = {}) {
   isPaused = false;
   isAborted = false;
   resumePromiseResolver = null;
@@ -60,6 +67,10 @@ export function resetPipelineState(sku, originalImage) {
   pipelineState.status = 'RUNNING';
   pipelineState.currentStep = 0;
   pipelineState.progressPercent = 0;
+  pipelineState.settings = {
+    shopeeMarket: settings.shopeeMarket || 'ph',
+    videoPlatform: settings.videoPlatform || 'both'
+  };
   pipelineState.rawOffers1688 = [];
   pipelineState.gemini1688Audit = [];
   pipelineState.valid1688Shops = [];
@@ -69,9 +80,12 @@ export function resetPipelineState(sku, originalImage) {
   pipelineState.shopeeShops = [];
   pipelineState.shopeeReviewsRaw = [];
   pipelineState.topReviews = [];
+  pipelineState.landingPageReviews = [];
+  pipelineState.allVerifiedReviews = [];
   pipelineState.rawVideoCandidates = [];
   pipelineState.rawTikTokVideos = [];
   pipelineState.formattedVideos = [];
+  pipelineState.allRaw1688Specs = [];
   pipelineState.enrichedData = null;
   pipelineState.processData = null;
   pipelineState.errors = [];

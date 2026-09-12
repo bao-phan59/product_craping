@@ -18,7 +18,35 @@ export function bindInputEvents({ onStart }) {
   const btnLoadUrl = document.getElementById('wfBtnLoadUrl');
   const skuInput = document.getElementById('wfSkuInput');
   const btnStart = document.getElementById('wfBtnStartPipeline');
+  const btnBrowseFile = document.getElementById('wfBtnBrowseFile');
   const btnRemoveImg = document.getElementById('wfBtnRemoveImage');
+
+  // Nút chọn file trực tiếp
+  if (btnBrowseFile) {
+    btnBrowseFile.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+    });
+  }
+
+  // Hỗ trợ dán ảnh trực tiếp từ Clipboard (Ctrl+V)
+  window.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          handleFileSelect(file);
+          break;
+        }
+      }
+    }
+  });
 
   // Drag & Drop
   if (dropzone) {
@@ -42,12 +70,20 @@ export function bindInputEvents({ onStart }) {
       }
     });
 
-    dropzone.addEventListener('click', () => {
-      if (fileInput) fileInput.click();
+    dropzone.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
     });
   }
 
   if (fileInput) {
+    fileInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
     fileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
         handleFileSelect(e.target.files[0]);
@@ -61,6 +97,13 @@ export function bindInputEvents({ onStart }) {
       const url = urlInput.value.trim();
       if (url) {
         setImageSource(url, 'URL Web');
+      }
+    });
+
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        btnLoadUrl.click();
       }
     });
   }
@@ -90,6 +133,48 @@ export function bindInputEvents({ onStart }) {
       if (onStart) onStart();
     });
   }
+
+  // Cấu hình Nền tảng: Khôi phục từ localStorage và lưu khi thay đổi
+  try {
+    const savedShopee = localStorage.getItem('wf_setting_shopee_market');
+    if (savedShopee) {
+      const radio = document.querySelector(`input[name="wfShopeeMarket"][value="${savedShopee}"]`);
+      if (radio) radio.checked = true;
+    }
+    const savedVideo = localStorage.getItem('wf_setting_video_platform');
+    if (savedVideo) {
+      const radio = document.querySelector(`input[name="wfVideoPlatform"][value="${savedVideo}"]`);
+      if (radio) radio.checked = true;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  document.querySelectorAll('input[name="wfShopeeMarket"]').forEach(r => {
+    r.addEventListener('change', (e) => {
+      try { localStorage.setItem('wf_setting_shopee_market', e.target.value); } catch (_) {}
+    });
+  });
+
+  document.querySelectorAll('input[name="wfVideoPlatform"]').forEach(r => {
+    r.addEventListener('change', (e) => {
+      try { localStorage.setItem('wf_setting_video_platform', e.target.value); } catch (_) {}
+    });
+  });
+}
+
+/**
+ * Lấy cấu hình thị trường Shopee và nền tảng Video đã chọn từ Màn hình 1
+ * @returns {{ shopeeMarket: 'ph'|'vn', videoPlatform: 'both'|'douyin'|'tiktok' }}
+ */
+export function getWorkflowSettings() {
+  const shopeeRadio = document.querySelector('input[name="wfShopeeMarket"]:checked');
+  const videoRadio = document.querySelector('input[name="wfVideoPlatform"]:checked');
+
+  return {
+    shopeeMarket: (shopeeRadio ? shopeeRadio.value : 'ph'),
+    videoPlatform: (videoRadio ? videoRadio.value : 'both')
+  };
 }
 
 /**

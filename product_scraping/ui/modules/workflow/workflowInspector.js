@@ -50,7 +50,7 @@ export function showProgressCompletionBanner(state) {
     titleEl.textContent = `QUY TRÌNH THU THẬP ĐÃ HOÀN TẤT 100%! (${state.sku})`;
   }
   if (btnZip && state?.sku) {
-    btnZip.innerHTML = `<span>📦</span> Tải File ZIP ${state.sku}.zip`;
+    btnZip.innerHTML = `Tải File ZIP ${state.sku}.zip`;
   }
 
   if (banner) banner.style.display = 'block';
@@ -88,7 +88,7 @@ export function showErrorDebugUI(err, stepIndex = 1, rawDetails = null) {
   const stepNameEl = document.getElementById('wfProgressStepName');
   const detailEl = document.getElementById('wfProgressDetail');
 
-  if (stepNameEl) stepNameEl.textContent = `❌ Đã Dừng: Lỗi Ở Bước ${stepIndex}`;
+  if (stepNameEl) stepNameEl.textContent = `Đã Dừng: Lỗi Ở Bước ${stepIndex}`;
   if (detailEl) detailEl.textContent = err.message || 'Lỗi thực thi';
   if (bar) bar.style.background = '#ef4444';
 
@@ -126,7 +126,7 @@ ${err.stack || 'Không có stack trace'}
 [HƯỚNG DẪN XỬ LÝ NHANH]:
 1. Đảm bảo Tab 1688 (https://s.1688.com) đang mở trên trình duyệt và đã đăng nhập tài khoản.
 2. Nếu gặp lỗi "Failed to fetch": Đảm bảo CORS header và tab origin được đồng bộ.
-3. Bấm nút "📋 Sao Chép Lỗi Để Debug" bên dưới để lấy toàn bộ thông tin kỹ thuật gửi cho lập trình viên.`;
+3. Bấm nút "Sao Chép Lỗi Để Debug" bên dưới để lấy toàn bộ thông tin kỹ thuật gửi cho lập trình viên.`;
   }
 
   if (errorBox) {
@@ -186,13 +186,13 @@ export function bindProgressEvents({
       if (btnPause.textContent.includes('Tạm Dừng')) {
         const ok = pipeline.pausePipeline();
         if (ok) {
-          btnPause.innerHTML = '<span>▶️</span> Tiếp Tục';
+          btnPause.innerHTML = 'Tiếp Tục';
           btnPause.classList.add('btn-resume-glow');
         }
       } else {
         const ok = pipeline.resumePipeline();
         if (ok) {
-          btnPause.innerHTML = '<span>⏸️</span> Tạm Dừng';
+          btnPause.innerHTML = 'Tạm Dừng';
           btnPause.classList.remove('btn-resume-glow');
         }
       }
@@ -213,7 +213,7 @@ export function bindProgressEvents({
     btnCopyLog.addEventListener('click', async () => {
       const ok = await logger.copyAllLogs();
       if (ok) {
-        showToast('📋 Đã sao chép toàn bộ Terminal Log vào Clipboard!');
+        showToast('Đã sao chép toàn bộ Terminal Log vào Clipboard!');
       }
     });
   }
@@ -227,7 +227,7 @@ export function bindProgressEvents({
   if (btnToggleScroll) {
     btnToggleScroll.addEventListener('click', () => {
       const isAuto = logger.toggleAutoScroll();
-      btnToggleScroll.textContent = isAuto ? '📜 Cuộn: BẬT' : '📜 Cuộn: TẮT';
+      btnToggleScroll.textContent = isAuto ? 'Tự động cuộn: BẬT' : 'Tự động cuộn: TẮT';
     });
   }
 
@@ -237,7 +237,7 @@ export function bindProgressEvents({
       const logs = (await logger.copyAllLogs()) ? '\n\n[TERMINAL LOGS]:\n' + (document.getElementById('terminalLogOutput')?.innerText || '') : '';
       const fullText = `=== BÁO CÁO LỖI DEBUG WORKFLOW PIPELINE ===\n${errorMsg}${logs}`;
       await navigator.clipboard.writeText(fullText);
-      showToast('📋 Đã sao chép toàn bộ lỗi & logs để debug!');
+      showToast('Đã sao chép toàn bộ lỗi & logs để debug!');
     });
   }
 
@@ -307,7 +307,7 @@ export function bindProgressEvents({
     const tsv = exporter.generateTsvString(state);
     const ok = await exporter.copyTsvToClipboard(tsv);
     if (ok) {
-      showToast('📋 Đã sao chép 24 cột dữ liệu vào Clipboard!');
+      showToast('Đã sao chép 24 cột dữ liệu vào Clipboard!');
     } else {
       alert('Không thể sao chép vào Clipboard!');
     }
@@ -317,7 +317,7 @@ export function bindProgressEvents({
   const triggerLogDownload = () => {
     const sku = pipeline?.pipelineState?.sku || 'WORKFLOW';
     logger.downloadLogsAsFile(sku);
-    showToast('📥 Đang tải xuống file log...');
+    showToast('Đang tải xuống file log...');
   };
 
   // Nút Tải ZIP (Quick banner & Bottom footer)
@@ -374,7 +374,7 @@ export function bindWarningEvents({ pipeline, switchWorkflowScreen }) {
   if (btnResume) {
     btnResume.addEventListener('click', () => {
       if (btnPause) {
-        btnPause.innerHTML = '<span>⏸️</span> Tạm Dừng';
+        btnPause.innerHTML = 'Tạm Dừng';
         btnPause.classList.remove('btn-resume-glow');
       }
       if (switchWorkflowScreen) switchWorkflowScreen('screenWorkflowProgress');

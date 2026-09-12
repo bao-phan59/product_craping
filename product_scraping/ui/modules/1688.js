@@ -35,15 +35,15 @@ export function setup1688Module({ alibaba }) {
       const authInfo = await alibaba.auth.initialize();
       const token = authInfo.token;
       if (token) {
-        statusText.textContent = `🟢 Đã tự động nạp ${authInfo.cookieCount} cookies từ trình duyệt! (Token: ${token.slice(0, 10)}...)`;
+        statusText.textContent = `Đã tự động nạp ${authInfo.cookieCount} cookies từ trình duyệt! (Token: ${token.slice(0, 10)}...)`;
         if (tabStatusText) tabStatusText.textContent = `1688 Sẵn Sàng (Token: ${token.slice(0, 8)}...)`;
         if (tabDot) {
           tabDot.className = 'status-dot dot-green';
         }
       } else {
-        statusText.textContent = '🟡 Đang kết nối 1688 Gateway để cấp token mới...';
+        statusText.textContent = 'Đang kết nối 1688 Gateway để cấp token mới...';
         await alibaba.uploadImage('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==').catch(() => {});
-        statusText.textContent = '🟢 Đã tự động kết nối và đồng bộ phiên 1688 thành công!';
+        statusText.textContent = 'Đã tự động kết nối và đồng bộ phiên 1688 thành công!';
       }
     } catch (e) {
       statusText.textContent = `Lỗi đồng bộ: ${e.message}`;
@@ -128,8 +128,8 @@ export function setup1688Module({ alibaba }) {
       resultsList.innerHTML = `
         <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-            <span style="color: #38bdf8; font-weight: 700; font-size: 13px;">🐞 Báo Cáo Kiểm Tra Hệ Thống 1688 Gateway & Session</span>
-            <button class="btn-copy-debug-report" style="background: #0369a1; border: 1px solid #38bdf8; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">📋 Sao chép báo cáo debug</button>
+            <span style="color: #38bdf8; font-weight: 700; font-size: 13px;">Báo Cáo Kiểm Tra Hệ Thống 1688 Gateway & Session</span>
+            <button class="btn-copy-debug-report" style="background: #0369a1; border: 1px solid #38bdf8; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">Sao chép báo cáo debug</button>
           </div>
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
             Token H5: <strong style="color: #38bdf8;">${authInfo.token || 'Chưa có'}</strong> | 
@@ -142,8 +142,8 @@ export function setup1688Module({ alibaba }) {
 
       resultsList.querySelector('.btn-copy-debug-report')?.addEventListener('click', (e) => {
         navigator.clipboard.writeText(reportJson);
-        e.target.textContent = '✅ Đã sao chép!';
-        setTimeout(() => { e.target.textContent = '📋 Sao chép báo cáo debug'; }, 2000);
+        e.target.textContent = 'Đã sao chép!';
+        setTimeout(() => { e.target.textContent = 'Sao chép báo cáo debug'; }, 2000);
       });
 
       statusText.textContent = 'Đã hoàn thành kiểm tra 1688 Gateway!';
@@ -164,7 +164,7 @@ export function setup1688Module({ alibaba }) {
     // Tự động kiểm tra tab 1688 nếu chưa có để lấy session và tránh timeout
     const aTab = await alibaba.getActive1688Tab();
     if (!aTab) {
-      statusText.textContent = '🟡 Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
+      statusText.textContent = 'Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
       await alibaba.open1688Tab();
       await new Promise(r => setTimeout(r, 2500));
     }
@@ -192,7 +192,7 @@ export function setup1688Module({ alibaba }) {
     // Tự động kiểm tra tab 1688 nếu chưa có để lấy session và tránh timeout
     const aTab = await alibaba.getActive1688Tab();
     if (!aTab) {
-      statusText.textContent = '🟡 Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
+      statusText.textContent = 'Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
       await alibaba.open1688Tab();
       await new Promise(r => setTimeout(r, 2500));
     }
@@ -220,7 +220,7 @@ export function setup1688Module({ alibaba }) {
     // Tự động kiểm tra tab 1688 nếu chưa có để tránh timeout
     const aTab = await alibaba.getActive1688Tab();
     if (!aTab) {
-      statusText.textContent = '🟡 Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
+      statusText.textContent = 'Đang mở tab s.1688.com để lấy token H5 tránh timeout (đợi 2.5s)...';
       await alibaba.open1688Tab();
       await new Promise(r => setTimeout(r, 2500));
     }
@@ -251,9 +251,9 @@ export function setup1688Module({ alibaba }) {
           <p>Không tìm thấy xưởng phù hợp (0 xưởng sỉ).</p>
           ${rawJson ? `
             <details style="margin-top: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 10px;">
-              <summary style="color: #38bdf8; font-size: 12px; cursor: pointer; font-weight: 600;">🔍 Xem phản hồi thô từ Alibaba (Raw Server Response)</summary>
+              <summary style="color: #38bdf8; font-size: 12px; cursor: pointer; font-weight: 600;">Xem phản hồi thô từ Alibaba (Raw Server Response)</summary>
               <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
-                <button class="btn-copy-zero-raw" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">📋 Sao chép</button>
+                <button class="btn-copy-zero-raw" style="background: #1e293b; border: 1px solid #475569; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Sao chép</button>
               </div>
               <pre style="color: #cbd5e1; font-size: 11px; font-family: Consolas, monospace; max-height: 250px; overflow: auto; margin-top: 6px; white-space: pre-wrap; word-break: break-all;">${rawDump}</pre>
             </details>
@@ -263,8 +263,8 @@ export function setup1688Module({ alibaba }) {
 
       resultsList.querySelector('.btn-copy-zero-raw')?.addEventListener('click', (e) => {
         navigator.clipboard.writeText(rawDump);
-        e.target.textContent = '✅ Đã sao chép!';
-        setTimeout(() => { e.target.textContent = '📋 Sao chép'; }, 2000);
+        e.target.textContent = 'Đã sao chép!';
+        setTimeout(() => { e.target.textContent = 'Sao chép'; }, 2000);
       });
       return;
     }
@@ -276,27 +276,31 @@ export function setup1688Module({ alibaba }) {
       card.className = 'product-card';
       const cny = item.pricing?.priceCny || item.price || item.formattedPrice || '0';
       const vnd = item.pricing?.priceFormattedVnd || (Math.round(Number(cny) * 3550).toLocaleString('vi-VN') + ' ₫');
-      const imgUrl = (item.imageUrl || item.coverImage || '').replace(/&amp;/g, '&');
-      const title = item.title || item.subject || 'Sản phẩm 1688';
-      const company = item.company?.name || item.companyName || 'Xưởng 1688';
-      const detailUrl = item.detailUrl || item.offerUrl || `https://detail.1688.com/offer/${item.offerId || item.id}.html`;
+      const rawImg = (item.imageUrl || item.coverImage || '').replace(/&amp;/g, '&');
+      const safeImg = (rawImg.startsWith('http://') || rawImg.startsWith('https://')) ? rawImg : fallback1688Svg;
+      const rawTitle = item.title || item.subject || 'Sản phẩm 1688';
+      const safeTitle = escapeHtml(rawTitle);
+      const safeCompany = escapeHtml(item.company?.name || item.companyName || 'Xưởng 1688');
+      const rawDetail = item.detailUrl || item.offerUrl || `https://detail.1688.com/offer/${item.offerId || item.id}.html`;
+      const safeDetailUrl = (rawDetail.startsWith('http://') || rawDetail.startsWith('https://')) ? rawDetail : '#';
+      const safeMoq = Number(item.moq || 1);
 
       card.innerHTML = `
         <div class="product-thumb-wrap">
-          <img class="product-thumb" src="${imgUrl || fallback1688Svg}" alt="${title}" referrerpolicy="no-referrer" loading="lazy">
+          <img class="product-thumb" src="${safeImg}" alt="${safeTitle}" referrerpolicy="no-referrer" loading="lazy">
         </div>
         <div class="product-info">
-          <div class="product-title" title="${title}">${title}</div>
+          <div class="product-title" title="${safeTitle}">${safeTitle}</div>
           <div class="product-price-row">
-            <span class="price-cny">¥${cny}</span>
-            <span style="font-size: 12px; color: #10b981; font-weight: 600;">≈ ${vnd}</span>
+            <span class="price-cny">¥${escapeHtml(cny)}</span>
+            <span style="font-size: 12px; color: #10b981; font-weight: 600;">≈ ${escapeHtml(vnd)}</span>
           </div>
           <div class="product-meta">
-            <span>MOQ: ${item.moq || 1} cái</span>
-            <span>${company}</span>
+            <span>MOQ: ${safeMoq} cái</span>
+            <span>${safeCompany}</span>
           </div>
           <div class="card-actions">
-            <a href="${detailUrl}" target="_blank" class="btn-card-action" style="color: #ff6000;">Mở Xưởng 1688</a>
+            <a href="${safeDetailUrl}" target="_blank" rel="noopener noreferrer" class="btn-card-action" style="color: #ff6000;">Mở Xưởng 1688</a>
           </div>
         </div>
       `;
@@ -309,4 +313,14 @@ export function setup1688Module({ alibaba }) {
       resultsList.appendChild(card);
     });
   }
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

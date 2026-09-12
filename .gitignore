@@ -10,3 +10,4 @@ _metadata/
 Thumbs.db
 node_modules/
 *.log
+scratch/

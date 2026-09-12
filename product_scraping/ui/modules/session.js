@@ -10,10 +10,10 @@ export async function checkGlobalSessions({ shopee, tiktok, alibaba, gemini }) {
     const shopeeText = document.getElementById('shopeeTabStatus');
     if (shopeeTab && shopeeDot && shopeeText) {
       shopeeDot.className = 'status-dot dot-green';
-      shopeeText.innerHTML = `🟢 Shopee Tab Đang Kết Nối (ID: ${shopeeTab.id})`;
+      shopeeText.innerHTML = `Shopee Tab Đang Kết Nối (ID: ${shopeeTab.id})`;
     } else if (shopeeDot && shopeeText) {
       shopeeDot.className = 'status-dot dot-yellow';
-      shopeeText.innerHTML = `🟡 Chưa có tab Shopee (Bấm nút bên cạnh để mở)`;
+      shopeeText.innerHTML = `Chưa có tab Shopee (Bấm nút bên cạnh để mở)`;
     }
 
     // 2. TikTok / Douyin
@@ -24,10 +24,10 @@ export async function checkGlobalSessions({ shopee, tiktok, alibaba, gemini }) {
     if (tiktokDot && tiktokText) {
       if (ttTab || dyTab) {
         tiktokDot.className = 'status-dot dot-green';
-        tiktokText.innerHTML = `🟢 Tab Đang Kết Nối: ${ttTab ? 'TikTok' : ''} ${dyTab ? 'Douyin' : ''}`;
+        tiktokText.innerHTML = `Tab Đang Kết Nối: ${ttTab ? 'TikTok' : ''} ${dyTab ? 'Douyin' : ''}`;
       } else {
         tiktokDot.className = 'status-dot dot-yellow';
-        tiktokText.innerHTML = `🟡 Chưa mở tab TikTok / Douyin (Hệ thống sẽ tự mở khi tìm kiếm)`;
+        tiktokText.innerHTML = `Chưa mở tab TikTok / Douyin (Hệ thống sẽ tự mở khi tìm kiếm)`;
       }
     }
 
@@ -38,24 +38,24 @@ export async function checkGlobalSessions({ shopee, tiktok, alibaba, gemini }) {
     if (aDot && aText) {
       if (aTab) {
         aDot.className = 'status-dot dot-green';
-        aText.innerHTML = `🟢 1688 Tab Đang Kết Nối (ID: ${aTab.id})`;
+        aText.innerHTML = `1688 Tab Đang Kết Nối (ID: ${aTab.id})`;
       } else {
         aDot.className = 'status-dot dot-yellow';
-        aText.innerHTML = `🟡 Chưa có tab 1688 (Hệ thống sẽ tự mở khi tìm kiếm)`;
+        aText.innerHTML = `Chưa có tab 1688 (Hệ thống sẽ tự mở khi tìm kiếm)`;
       }
     }
 
-    // 4. Gemini
-    const gAuth = await gemini.auth.initialize();
+    // 4. Gemini (Chỉ kiểm tra cookie, không gọi mạng để tránh spam)
+    const isGeminiAuthed = await gemini.auth.getStatus();
     const gDot = document.getElementById('geminiDot');
     const gText = document.getElementById('geminiTabStatus');
     if (gDot && gText) {
-      if (gAuth.authenticated) {
+      if (isGeminiAuthed) {
         gDot.className = 'status-dot dot-green';
-        gText.innerHTML = `🟢 Tài Khoản Google Gemini: ${gAuth.email || 'Đã đăng nhập'}`;
+        gText.innerHTML = `Tài Khoản Google Gemini: Đã đăng nhập`;
       } else {
         gDot.className = 'status-dot dot-yellow';
-        gText.innerHTML = `🟡 Chưa tìm thấy phiên Google trên gemini.google.com`;
+        gText.innerHTML = `Chưa tìm thấy phiên Google trên gemini.google.com`;
       }
     }
   } catch (err) {

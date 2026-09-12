@@ -302,16 +302,68 @@ export class Alibaba1688SDK {
   }
 
   /**
-   * Lấy chi tiết sản phẩm 1688 theo Offer ID
+   * Lấy chi tiết sản phẩm 1688 theo Offer ID và trích xuất bộ ảnh Gallery HD
    * @param {string|number} offerId 
    */
   async getOfferDetail(offerId) {
     const detailUrl = Alibaba1688Endpoints.OFFER_DETAIL_URL(offerId);
-    return {
-      offerId: String(offerId),
-      detailUrl,
-      note: 'Để cào toàn bộ thuộc tính SKU, hãy dùng In-Tab Scripting trực tiếp trên trang chi tiết sản phẩm.',
-    };
+    try {
+      const res = await this._fetchJson(detailUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Referer': 'https://s.1688.com/'
+        }
+      });
+
+      const html = typeof res === 'string' ? res : (res?.rawText || JSON.stringify(res || {}));
+      const galleryImages = [];
+      const seenImgs = new Set();
+
+      // 1. Trích xuất ảnh alicdn tiêu chuẩn từ trang chi tiết sản phẩm
+      const imgRegex = /https:\/\/cbu01\.alicdn\.com\/img\/ibank\/[a-zA-Z0-9_\-\.\/]+(?:\.800x800|\.search|\.300x300)?\.jpg/gi;
+      let m;
+      while ((m = imgRegex.exec(html)) !== null) {
+        const cleanUrl = Alibaba1688Parser.formatImageUrl(m[0]);
+        if (!seenImgs.has(cleanUrl)) {
+          seenImgs.add(cleanUrl);
+          galleryImages.push(cleanUrl);
+        }
+      }
+
+      // 2. Trích xuất cấu trúc dữ liệu nhúng window.__INIT_DATA nếu có
+      const initMatch = html.match(/window\.__INIT_DATA\s*=\s*(\{[\s\S]*?\});/);
+      let pageData = null;
+      if (initMatch) {
+        try { pageData = JSON.parse(initMatch[1]); } catch (_) {}
+      }
+
+      if (Array.isArray(pageData?.data?.offerData?.images)) {
+        pageData.data.offerData.images.forEach(img => {
+          const u = Alibaba1688Parser.formatImageUrl(img);
+          if (u && !seenImgs.has(u)) {
+            seenImgs.add(u);
+            galleryImages.push(u);
+          }
+        });
+      }
+
+      return {
+        offerId: String(offerId),
+        detailUrl,
+        images: galleryImages,
+        imageUrls: galleryImages,
+        rawHtmlAvailable: Boolean(html && html.length > 500)
+      };
+    } catch (err) {
+      console.warn(`Alibaba1688SDK: Không thể tải chi tiết #${offerId}: ${err.message}`);
+      return {
+        offerId: String(offerId),
+        detailUrl,
+        images: [],
+        imageUrls: []
+      };
+    }
   }
 
   /**
